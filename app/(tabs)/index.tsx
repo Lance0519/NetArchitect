@@ -34,6 +34,7 @@ import { View } from 'react-native';
 
 import { AppText, Banner, Card, Divider, ListRow, Screen } from '@/components';
 import { STANDARD_REFS } from '@/core/standards';
+import { useNetworkStore } from '@/store/network-store';
 
 interface ToolEntry {
   readonly route: '/(tabs)/calculator' | '/(tabs)/vlsm' | '/(tabs)/planner' | '/(tabs)/audit';
@@ -79,6 +80,21 @@ const KEY_STANDARDS = [
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { listPlans } = useNetworkStore();
+  const recentPlans = listPlans().slice(0, 5);
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
+
+  const formatRelative = (ts: number): string => {
+    const diff = now - ts;
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
+  };
 
   return (
     <Screen title="NetArchitect" subtitle="IPv4 subnetting, VLSM and network design." scroll>
@@ -94,9 +110,7 @@ export default function HomeScreen() {
         </Card>
 
         <View className="gap-2">
-          <AppText variant="label" tone="faint">
-            TOOLS
-          </AppText>
+          <AppText variant="label" tone="faint">TOOLS</AppText>
           <Card padding="none" className="overflow-hidden">
             {TOOLS.map((tool, index) => (
               <View key={tool.route}>
@@ -111,10 +125,31 @@ export default function HomeScreen() {
           </Card>
         </View>
 
+        {recentPlans.length > 0 ? (
+          <View className="gap-2">
+            <View className="flex-row items-center justify-between">
+              <AppText variant="label" tone="faint">RECENT PLANS</AppText>
+              <AppText variant="caption" tone="faint" onPress={() => router.push('/plans')}>
+                View all
+              </AppText>
+            </View>
+            <Card padding="none" className="overflow-hidden">
+              {recentPlans.map((plan, index) => (
+                <View key={plan.id}>
+                  {index > 0 ? <Divider inset="pl-4" /> : null}
+                  <ListRow
+                    title={plan.name}
+                    description={`${plan.subnets.length} subnets · ${plan.parentCidr} · ${formatRelative(plan.updatedAt)}`}
+                    onPress={() => { router.push('/plans/' + plan.id as any); }}
+                  />
+                </View>
+              ))}
+            </Card>
+          </View>
+        ) : null}
+
         <View className="gap-2">
-          <AppText variant="label" tone="faint">
-            REFERENCE
-          </AppText>
+          <AppText variant="label" tone="faint">REFERENCE</AppText>
           <Card padding="lg">
             <View className="gap-3">
               <AppText variant="body" tone="muted">
@@ -137,9 +172,7 @@ export default function HomeScreen() {
         </View>
 
         <View className="gap-2">
-          <AppText variant="label" tone="faint">
-            MORE
-          </AppText>
+          <AppText variant="label" tone="faint">MORE</AppText>
           <Card padding="none" className="overflow-hidden">
             <ListRow
               title="Saved plans"

@@ -34,6 +34,7 @@ export { Screen, type ScreenProps } from './Screen';
 export { SegmentedControl, type SegmentedControlProps, type SegmentOption } from './SegmentedControl';
 export { Select, type SelectOption, type SelectProps } from './Select';
 export { Sheet, type SheetProps } from './Sheet';
+export { Snackbar, type SnackbarProps, useSnackbar } from './Snackbar';
 export { SubnetBar, type SubnetBarProps } from './SubnetBar';
 export { SubnetEditor, type SubnetEditorProps } from './SubnetEditor';
 export { SubnetTable, type SubnetTableProps } from './SubnetTable';
