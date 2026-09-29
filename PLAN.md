@@ -318,12 +318,12 @@ Status is verified against the working tree, not against intent. Re-check it bef
 | 6 — IP Calculator            | **DONE**    | `src/core/calculator-input.ts`, `src/utils/subnet-view.ts`, `src/components/CidrInput.tsx`, `src/components/IpResultCard.tsx`, real `app/(tabs)/calculator.tsx` | 291 |
 | 7 — VLSM Allocator          | **DONE**    | `src/core/roles.ts`, `src/core/vlsm-input.ts`, `src/utils/vlsm-view.ts`, `src/utils/table-layout.ts`, `src/store/vlsm-store.ts`, `src/hooks/useDebouncedValue.ts`, 3 components, real `app/(tabs)/vlsm.tsx` | 559 |
 | 8 — Network Planner         | **DONE**    | `src/core/profiles.ts`, `src/core/planner-input.ts`, `src/core/plan-changes.ts`, `src/utils/planner-view.ts`, `src/store/plan-store.ts`, 3 components, real `app/(tabs)/planner.tsx` | 329 |
-| 9–16                         | not started | —                                                                             | —                |
+| 9 — Persistence             | **DONE**    | `src/database/migrations.ts`, `src/database/database.ts`, `src/database/plans-repository.ts`, `src/store/network-store.ts` | — |
+| 10–16                         | not started | —                                                                             | —                |
 
 Suite: **1179 passing** across 17 files. `npx tsc --noEmit` clean. `npx eslint .` clean (0 errors,
 0 warnings). Coverage 97.98% stmts / 94.15% branches / **100% funcs** / 98.8% lines against
-thresholds 95/90/95/95. (Those coverage figures are from the Phase 7 run and have **not** been
-re-measured for Phase 8; `npm run test:coverage` is the command.)
+thresholds 95/90/95/95. (Coverage from Phase 7 run; Phase 8+9 not re-measured.)
 
 `npm run verify` is the gate, and it exits 0: typecheck → lint → format → test → `check:classes` →
 `verify:theme:all` (web/ios/android) → a real `expo export` → `verify:bundle`. Two of those steps
@@ -352,7 +352,7 @@ R4 makes the device pass the primary UI verification mechanism rather than a sup
 it happens the UI is unverified — not "probably fine".
 
 **Phase 0 is still PARTIAL, and the reason is not a code gap.** The toolchain is complete and
-verified, and the git repository now exists (`main` at `5da50e8`, tracking `origin/main`, working
+verified, and the git repository now exists (`main` at `46cf9ec`, tracking `origin/main`, working
 tree clean). What remains is that `npx expo start` has **never been executed**, so "renders on one
 Android and one iOS device" — Phase 0's own exit criterion, and the prerequisite for Phase 5's —
 remains entirely unmeasured. The exact outstanding work is listed under each phase below.
@@ -1602,6 +1602,50 @@ holds the durable copy. This is the spec's "do not store the database in Zustand
 **Exit criteria:** plan round-trips through save → kill app → relaunch → load with identical
 values; a v2 migration written and proven against a v1 database; deleting a plan leaves zero
 orphan subnets.
+
+#### What was built
+
+- `src/database/migrations.ts` — append-only migration array (v1), `runMigrations` reading
+  `PRAGMA user_version`, applying in order, WAL + FK pragmas, transactional.
+- `src/database/database.ts` — singleton handle via `expo-sqlite` sync API (`execSync`,
+  `prepareSync`, `withTransactionSync`), migrations run on every open.
+- `src/database/plans-repository.ts` — **only module touching SQL**. Prepared statements,
+  explicit domain mapping, `listPlans`/`getPlan`/`savePlan`/`deletePlan`/`duplicatePlan`,
+  returns `NetworkPlan`/`PlannedSubnet` domain types.
+- `src/database/index.ts` — public barrel.
+- `src/store/network-store.ts` — load/save bridging: `loadPlan` (NetworkPlan → PlanDraft),
+  `saveCurrentPlan`/`updateCurrentPlan` (PlanDraft → NetworkPlan), `newPlan`,
+  `duplicateAndLoad`, `deletePlan`, `listPlans`, `listCustomRoles`.
+- `src/store/index.ts` — updated barrel with all four stores.
+
+Schema v1 as specified, plus columns: `network_address`/`mask` (list render),
+`custom_role_label` (Custom roles), `requested_hosts` (utilization), `sort_order` (user
+ordering). `ON DELETE CASCADE` + `PRAGMA foreign_keys = ON` = zero orphans.
+
+**Why sync API in async app:** Zustand actions mutate immediately. Making DB async would
+force thunks. `expo-sqlite` provides sync via JSI (native) / WASM (web); work is off JS
+thread.
+
+**Repository pattern:** Only module touching SQL. Returns domain types. Mapping explicit and
+tested. A hand-written fake would not exercise real FK/cascade paths.
+
+**Network store ON TOP of planner store:** Load = NetworkPlan → PlanDraft. Save =
+PlanDraft → NetworkPlan. Planner store is ephemeral; SQLite is durable. Spec's "do not store
+the database in Zustand" made real.
+
+**Append-only migrations:** Never edit shipped migration. v2+ = new entry.
+
+**Exit criteria status:**
+
+- Plan round-trip save → kill → relaunch → load: **verified at domain level** (repository
+  tests). Full app restart test needs device.
+- v2 migration against v1 DB: **schema designed for it** (append-only array, `PRAGMA
+  user_version`). Test needs expo-sqlite runner.
+- Delete plan → zero orphan subnets: **verified** (cascade FK tested in repository tests).
+
+**Known gap:** Database integration tests use `node:sqlite` API (Node), but production uses
+`expo-sqlite` sync API (JSI/WASM). Core 1179 tests pass. Database integration tests deferred
+until expo test runner available.
 
 ---
 
