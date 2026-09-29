@@ -23,8 +23,10 @@ export { Badge, CidrBadge, SeverityTag, VlanBadge, type BadgeProps, type BadgeTo
 export { Banner, type BannerProps, type BannerTone } from './Banner';
 export { Button, IconButton, type ButtonProps, type ButtonSize, type ButtonVariant, type IconButtonProps } from './Button';
 export { Card, type CardProps, type CardTone } from './Card';
+export { CidrInput, type CidrInputProps } from './CidrInput';
 export { Divider, type DividerProps } from './Divider';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
+export { IpResultCard, type IpResultCardProps } from './IpResultCard';
 export { ListRow, type ListRowProps } from './ListRow';
 export { Screen, type ScreenProps } from './Screen';
 export { SegmentedControl, type SegmentedControlProps, type SegmentOption } from './SegmentedControl';

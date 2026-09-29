@@ -151,9 +151,17 @@ const reportField = (
 /* ================================================================== *
  * Pinned user-facing copy
  *
- * These four strings are part of the product contract and are asserted
- * verbatim in tests/validation.test.ts. They are re-exported so no screen
- * retypes them and drifts.
+ * These strings are part of the product contract and are asserted verbatim in
+ * tests/validation.test.ts. They are exported so no screen retypes them and
+ * drifts.
+ *
+ * This is the registry for the ZOD layer only. `CALCULATOR_MESSAGES` in
+ * calculator-input.ts is a separate registry for the calculator's own input
+ * rules, and the two are deliberately not merged: these are attached as schema
+ * issues and read by the form layer, while those are returned as an outcome
+ * discriminant and read by the screen. Merging them would mean one growing
+ * object with two unrelated audiences, and the useful property here is that a
+ * string appears in exactly one place.
  * ================================================================== */
 
 export const MESSAGES = Object.freeze({

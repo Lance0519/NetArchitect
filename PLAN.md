@@ -309,27 +309,28 @@ Status is verified against the working tree, not against intent. Re-check it bef
 
 | Phase                        | Status      | Artefacts                                                                     | Tests            |
 | ---------------------------- | ----------- | ----------------------------------------------------------------------------- | ---------------- |
-| 0 — Scaffold & Toolchain     | **PARTIAL** | all config present and asserted; **no repository, app never booted on a device** | 0 (runner works) |
+| 0 — Scaffold & Toolchain     | **PARTIAL** | all config present and asserted; **git repo created and pushed; app never booted on a device** | 0 (runner works) |
 | 1 — Types, Constants, Errors | **DONE**    | `src/types/network.ts`, `src/core/errors.ts`, `src/core/standards.ts`, `src/utils/formatting.ts` | 22 |
 | 2 — IPv4 Engine              | **DONE**    | `src/core/ip-engine.ts`                                                       | 141              |
 | 3 — VLSM Engine              | **DONE**    | `src/core/vlsm-engine.ts`                                                     | 50               |
 | 4 — Validation Layer (Zod)   | **DONE**    | `src/core/validation.ts`                                                      | 100              |
 | 5 — Shell, Theme, Primitives | **DONE**    | 8 routes, 14 components, `src/theme/`, 3 verification scripts                  | 18 (`cn`)        |
-| 6–16                         | not started | —                                                                             | —                |
+| 6 — IP Calculator            | **DONE**    | `src/core/calculator-input.ts`, `src/utils/subnet-view.ts`, `src/components/CidrInput.tsx`, `src/components/IpResultCard.tsx`, real `app/(tabs)/calculator.tsx` | 291 |
+| 7–16                         | not started | —                                                                             | —                |
 
-Suite: **340 passing** across 5 files. `npx tsc --noEmit` clean. `npx eslint .` clean (0 errors,
-0 warnings). Coverage 97.53% stmts / 94.75% branches / **99.15% funcs** / 98.54% lines against
+Suite: **631 passing** across 7 files. `npx tsc --noEmit` clean. `npx eslint .` clean (0 errors,
+0 warnings). Coverage 97.87% stmts / 95.11% branches / **100% funcs** / 98.82% lines against
 thresholds 95/90/95/95.
 
 `npm run verify` is the gate, and it exits 0: typecheck → lint → format → test → `check:classes` →
 `verify:theme:all` (web/ios/android) → a real `expo export` → `verify:bundle`. Two of those steps
 exist because bugs got through every other step; see the Phase 5 section.
 
-**Phase 0 is still PARTIAL and the reason is not a code gap.** The toolchain is complete and
-verified, but there is still no git repository, and `npx expo start` has never been executed, so
-"renders on one Android and one iOS device" — Phase 0's own exit criterion, and the prerequisite
-for Phase 5's — remains entirely unmeasured. The exact outstanding work is listed under each phase
-below.
+**Phase 0 is still PARTIAL, and the reason is not a code gap.** The toolchain is complete and
+verified, and the git repository now exists (`main` at `352e2a6`, tracking `origin/main`, working
+tree clean). What remains is that `npx expo start` has **never been executed**, so "renders on one
+Android and one iOS device" — Phase 0's own exit criterion, and the prerequisite for Phase 5's —
+remains entirely unmeasured. The exact outstanding work is listed under each phase below.
 
 ---
 
@@ -1064,6 +1065,92 @@ than a snapshot.
 
 **Exit criteria:** all 33 prefixes produce correct output, spot-checked against Phase 2 tests;
 no layout overflow on a 320 pt screen; VoiceOver/TalkBack reads every field label.
+
+**Status: DONE (code).** 291 tests. `app/(tabs)/calculator.tsx`, `CidrInput`, `IpResultCard`,
+`src/core/calculator-input.ts`, `src/utils/subnet-view.ts`. `npm run verify` exits 0.
+
+How each criterion is actually met, and what is not yet met:
+
+- **"All 33 prefixes produce correct output" — met, and machine-checked rather than spot-checked.**
+  The criterion was written as a manual comparison against Phase 2's tests, which would have been a
+  human reading two sets of numbers and confirming they agree. Because R4 left no render runner, the
+  derivation had to become a value Vitest can reach, and once it was, the spot-check became stronger
+  than it was written to be: 33 prefixes × the engine's structural invariants (mask/wildcard
+  complementarity, network-boundary idempotence, range length, `/31` and `/32` edge handling), plus
+  a per-prefix check that every field of `SubnetInfo` is represented in the view, plus a per-prefix
+  check that no value renders as `undefined`, `NaN` or blank. A test *derives* the field list from
+  the type rather than restating 13 labels, so it cannot drift.
+- **"No layout overflow at 320 pt" — NOT verified.** Untestable without a render or a device. The
+  result rows were designed for it (label `shrink-0` with `maxWidth: 46%`, value `flex-1` and
+  wrapping, longest value 27 characters) and the width classes are asserted present in the bundle, but
+  "designed for it" is not "measured". This is the largest remaining gap and it is why the device pass
+  below is not optional.
+- **"VoiceOver/TalkBack reads every field label" — partially addressed, NOT verified.** Each row is a
+  single `Pressable` whose `accessibilityLabel` is `"<label>, <value>"` with a hint, so a screen
+  reader reads one coherent phrase rather than three fragments, and the `accessibilityHint` and its
+  exact text are asserted present in the shipped bundle. Whether it actually *sounds* right is a
+  device question.
+
+**Decisions taken in this phase, and why**
+
+1. **No React Hook Form or Zod resolver on this screen — a recorded departure from the plan above.**
+   Both were specified to serve one field that re-evaluates on every settled keystroke. The
+   requirement underneath them is *no reimplementation of validation, plus a debounce so keystrokes
+   do not recompute twice*, and `evaluateCombined` meets that more directly: it delegates to the
+   same engine the Zod schemas delegate to, so there is one parser rather than two. Wrapping one text
+   field in RHF here would add a subscription and a resolver to manage for no behaviour, and would
+   make the calculator's validation path differ from every other screen's. **RHF is still planned for
+   Phases 7–8**, where requirement rows are added, removed and reordered and `useFieldArray` is the
+   actual problem; it was declined here because it is the wrong tool for one field, not because it was
+   judged unnecessary.
+2. **`classifyCalculatorOutcome` returns three states, not two.** An empty field produces a *failure*
+   from the evaluator — there is no CIDR in an empty string — so `ok === false` cannot distinguish
+   "nothing typed yet" from "typed something wrong". The first version compared failure messages
+   against a remembered constant to tell them apart, which means rewording the `empty` string silently
+   turns the empty state into a red error banner on first launch. Naming the state as
+   `empty | invalid | ok` fixes it at the only layer that can see the difference, and makes the
+   screen a total `switch` with no cast and no fall-through.
+3. **A layout switch must never discard a half-typed entry, and `composeSplit` is tested to prove
+   it.** Switching from the split layout to the single field with only a prefix typed returned `''`,
+   which deleted the 24 the user had just typed *and looked like success* — the field went blank and
+   the empty state appeared, as though the app had reset itself. Both half-filled forms are now
+   rendered honestly, because the evaluator tolerating an incomplete field is precisely what lets its
+   message name the missing half.
+4. **`decomposeCombined` and `composeSplit` live in `src/core`, not in the component.** They are pure
+   string functions that decide what a half-filled entry becomes — a correctness question, not a
+   rendering one — so under R4 they belong where the tests can reach them. Round-tripping all 33
+   prefixes through both layouts is asserted.
+5. **The `/31`, `/32` and `/30` explanations are notices in the view model, not banners assembled in
+   the screen.** The plan asked for "special-case banners". They are built in `buildSubnetView`, which
+   means their presence, wording and citation are asserted for all 33 prefixes — and they are the two
+   or three notices most likely to need a wording change. A banner whose text lives in a component
+   cannot be asserted on.
+6. **The notice kind is `'info' | 'warn'`, not a `BannerTone`.** A view model naming a component's
+   tone union would invert the layering and make the model unusable from a screen with no `Banner`.
+   `IpResultCard` owns the mapping.
+
+**Bugs found and fixed while building this phase** — each was invisible to a green gate:
+
+| Bug | Why it was silent | Now caught by |
+| --- | --- | --- |
+| `split(/[/\s]+/)` written as `split(/[/\\s]+/)` — a class of slash, backslash and the letter `s` | Space separators did not split, so `192.168.1.50 24` was reported as a missing prefix. Slash cases still passed, so most of the suite stayed green | 5 accepted-form tests, plus a **negative control** asserting `\` and `s` are *not* separators |
+| `isAddress` pre-check swallowed field attribution and the engine's specific message | `192.168.1.500/24` was blamed on the whole field with an invented message instead of the address, and the engine's authoritative message never reached the user | Property assertions that the calculator returns the engine's `friendlyMessage` verbatim |
+| An invented `badAddressPart` message duplicated what the engine already says | A second definition of "not an address" that could disagree at the edges | Removed; `foo/24` now defers to the engine |
+| `barePrefix` stripped a leading slash *before* trimming | `'  /24 '` does not begin with a slash, so the anchored pattern matched nothing and the slash survived. Only the unpadded `'/24'` had been tested | Round-trip and padded-echo tests |
+| An `AppText` wrapping a `Copy` icon, and a notice `View` passed to `Banner` (which wraps children in `AppText`) | A `react-native-svg` element is a View; nesting one in a native `<Text>` is unsupported on Android. `tsc`, ESLint and `expo export` all pass regardless | Restructured; not machine-checkable, which is why it is written down here |
+| A second notice icon in a `text-warn` class that **does not exist** | `Banner` already renders its own tone icon, and `warn` maps to `text-high`. The invented class was silently dropped, leaving an uncoloured duplicate icon | Removed; `Banner` owns its icon by construction |
+| `accessibilityRole="alert"` plus `liveRegion="polite"` on a copy confirmation | Contradictory roles; a screen reader would announce a successful copy as an emergency | `polite` only, with the reasoning recorded at the call site |
+| `onOutcome` in an effect's dependency list | An inline arrow from the parent changes identity every render → the effect fires every render → infinite loop that only appears once someone else writes the parent | Held in a `useRef`, so the mistake is impossible rather than documented |
+| An `eslint-disable react-hooks/exhaustive-deps` | One memo read raw fields in split mode and settled text in combined mode, so the dependency list had to be padded with values that mode ignores | Three independent per-field debounces, so every dependency is a real input |
+
+**One check was added specifically because a green gate proved nothing.** `verify:bundle` now
+asserts the calculator's ten user-visible strings — its empty state, the copy hint, all three
+confirmed input rules, and the three prefix notices — are in the shipped bundle, because a screen
+present in source but absent from the artefact is an *ordinary* outcome (unrouted file, unresolved
+route) that `expo export` reports as success. It also runs a **negative control** first: it proves the
+marker search discriminates by asserting that a casing change, a negation, a plausible rewording and
+a full-width homoglyph are all *not* found, while the real string and a genuine prefix of it are. A
+search that cannot tell those apart is not a search.
 
 ---
 

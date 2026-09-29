@@ -145,6 +145,78 @@ console.log('\n--- app content sanity ---');
 check('app name present', hay.includes('NetArchitect'));
 check('offline statement present', hay.includes('Works entirely offline'));
 
+// A check that has never failed proves nothing, and this project's history is a
+// run of checks that passed while the thing they were checking was broken: the
+// @layer base token drop, the :root.dark native-only drop, the missing font-mono,
+// the no-op ESLint override, the cn() grouping gap. Every one of those had a green
+// gate.
+//
+// So before trusting any marker below, prove the mechanism discriminates. Each case
+// is a real marker deliberately perturbed in a way that must break the search: a
+// casing change, a negation, a plausible rewording, and a full-width homoglyph. A
+// search that cannot tell these from the real string is not a search, and finding
+// that out here is far cheaper than finding it out after a regression ships.
+console.log('\n--- negative control: does the marker search discriminate? ---');
+let controlBad = 0;
+const control = (label, ok) => {
+  if (!ok) controlBad += 1;
+  console.log((ok ? '  ok   ' : '  FAIL ') + label);
+};
+for (const [label, marker, shouldBeFound] of [
+  ['a real marker is found', 'Both addresses are usable (RFC 3021)', true],
+  ['a genuine prefix of it is found', 'Both addresses are usable', true],
+  ['a casing change is not found', 'Both addresses are usable (rfc 3021)', false],
+  ['a negation is not found', 'Both addresses are not usable', false],
+  ['a plausible rewording is not found', 'Only one address is usable (RFC 3021)', false],
+  // U+FF0F FULLWIDTH SOLIDUS where an ASCII slash belongs. A normaliser that folds
+  // it would let a half-width string pass against a full-width one, which is the
+  // class of near-miss that makes a green gate meaningless.
+  ['a full-width homoglyph is not found', '／31 is a point-to-point link', false],
+]) {
+  control(label, hay.includes(marker) === shouldBeFound);
+}
+failed += controlBad;
+if (controlBad > 0) {
+  console.log(
+    '\n  the marker search is not discriminating, so every result above it is\n' +
+      '  unreliable. Fix the search before reading any other line of this output.',
+  );
+}
+
+// A screen that is present in source but absent from the bundle is a completely
+// ordinary outcome, not an exotic one: an unrouted file, a route the navigator never
+// resolves, a dynamic import that got tree-shaken. `expo export` exits 0 for every
+// one of them, and so does this script without the checks below.
+//
+// So the calculator is asserted on by its own string literals. These are greppable
+// for the reason given at the top of this file - Hermes keeps string literals in a
+// string table, just not object literals - and each one is pinned verbatim in
+// tests/calculator-input.test.ts or tests/subnet-view.test.ts. A wording change is
+// therefore a product decision, and it should surface as a failing check here rather
+// than passing silently because a string stopped being grepped for.
+console.log('\n--- Phase 6: the calculator screen and its confirmed rules ---');
+for (const [label, marker] of [
+  // Screen chrome, unique to this route.
+  ['screen heading', 'IP Calculator'],
+  ['screen empty state', 'Nothing to calculate yet'],
+  // Accessibility strings. If the hint is gone, the rows shipped as unlabelled
+  // pressables, which is the exact failure the labels exist to prevent - and it is
+  // invisible in a screenshot.
+  ['row copy hint', 'Copies this value to the clipboard'],
+  // The input rules the user explicitly confirmed, verbatim from CALCULATOR_MESSAGES.
+  ['rule: empty field', 'Enter an address and prefix, for example 192.168.1.50/24.'],
+  ['rule: 24/24 refused as ambiguous', 'That is two prefix lengths with no address.'],
+  ['rule: leading slash accepted', 'A leading slash is fine.'],
+  // The special-case notices the plan asked for by name.
+  ['notice: /31 is RFC 3021', 'Both addresses are usable (RFC 3021)'],
+  ['notice: /32 is one address', 'One address, not a subnet'],
+  ['notice: /30 has two', 'Only two usable addresses'],
+  // The citation, which proves the view model shipped rather than only the screen.
+  ['citation RFC 3021', 'RFC 3021'],
+]) {
+  check(label, hay.includes(marker), marker.length > 46 ? marker.slice(0, 46) + '...' : marker);
+}
+
 console.log(
   '\nnote: token VALUES are not checked here. Hermes stores object literals as\n' +
     'bytecode, so `10,12,16` is not greppable. Run `npm run verify:theme` for that.',
