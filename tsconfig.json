@@ -1,0 +1,43 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    /* The engine must be provably correct, so the compiler is turned up as far
+     * as it goes without becoming impractical. Each flag below has caught or
+     * would have caught a real defect in this codebase. */
+    "strict": true,
+
+    /* Every index access returns T | undefined. This is the single most useful
+     * flag here: the VLSM engine and the validator index into arrays constantly,
+     * and without it `requirements[0].name` type-checks while crashing on an
+     * empty array at runtime. */
+    "noUncheckedIndexedAccess": true,
+
+    /* Requires `override` on any member that overrides a base member, so a
+     * renamed or dropped base method is a compile error rather than a silently
+     * dead override. */
+    "noImplicitOverride": true,
+
+    /* `{ a?: string }` and `{ a: string | undefined }` become distinct. The
+     * domain model uses `readonly` optional fields heavily, and this stops an
+     * explicit `undefined` from being written where the field was meant to be
+     * genuinely absent. */
+    "exactOptionalPropertyTypes": true,
+
+    /* A missing `break` in a switch that has cases falling through is almost
+     * always a bug, and in an address-range classifier it would be a wrong
+     * answer rather than a wrong branch. */
+    "noFallthroughCasesInSwitch": true,
+
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+
+    "forceConsistentCasingInFileNames": true,
+
+    /* `@/core/ip-engine` rather than a wall of `../../..`. */
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "nativewind-env.d.ts"],
+  "exclude": ["node_modules", "coverage", "dist", "web-build"]
+}

@@ -1,0 +1,162 @@
+/**
+ * NetArchitect design tokens.
+ *
+ * Every colour in the app resolves through one of the CSS variables below, and
+ * `tailwind.config.js` maps them to utility names. Two consequences that matter:
+ *
+ *  1. Dark mode is a variable swap, not a parallel set of `dark:` utilities on
+ *     every single element. A component that says `bg-surface text-ink` is
+ *     correct in both themes and cannot get one half of its pair wrong.
+ *  2. Severity is a first-class token, not an ad-hoc red or amber picked at the
+ *     call site. If severity colour were chosen per component, two screens
+ *     would eventually disagree about what "high" looks like.
+ *
+ * Values are space-separated RGB channels so Tailwind's `<alpha-value>` slot
+ * keeps working, which is what makes `bg-critical/10` and `border-line/60` legal.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------ *
+ * TWO SILENT FAILURES LIVE HERE. BOTH WERE MEASURED, NOT ASSUMED.
+ *
+ * FAILURE 1 - the dark block must be written `.dark:root`, NOT `:root.dark`.
+ *
+ * This is the more important of the two, and it fails on the NATIVE platforms
+ * only, where it cannot be spotted in a browser at all.
+ *
+ * Tailwind is not the cause. Compiling this file with `NATIVEWIND_OS=android`
+ * emits the `:root.dark` block correctly, dark values and all. The loss happens
+ * one stage later, when react-native-css-interop runs the result through
+ * lightningcss and rewrites it into the JS object the runtime consumes.
+ *
+ * That stage recognises a root dark-variable block in only two shapes, per
+ * `isRootDarkVariableSelector` in
+ * `node_modules/react-native-css-interop/dist/css-to-rn/normalize-selectors.js`:
+ *
+ *   1. `.dark:root`                   class selector, then the :root pseudo-class
+ *   2. `:root[class~="dark"]`         the :root pseudo-class, then an ATTRIBUTE
+ *      `:root[class="dark"]`          selector
+ *
+ * `:root.dark` matches neither. lightningcss parses `.dark` in that position as
+ * a *class* selector rather than an *attribute* selector, so branch 2's
+ * `second.type === "attribute"` test fails, and branch 1 requires the order to be
+ * the other way round. The rule is then dropped from the output completely.
+ *
+ * The symptom is unusually bad, because nothing reports it. The build exits 0
+ * and prints no warning; every utility class still resolves; and the compiled
+ * `rootVariables` map contains all eighteen tokens carrying a `light` value and
+ * NO `dark` value. The app renders flawlessly in light mode and simply does not
+ * change when the user selects dark. There is no error to trace and nothing in
+ * the log to grep for.
+ *
+ * `.dark:root` denotes the same thing - the `dark` class is on the root element,
+ * and `.dark:root` and `:root.dark` have identical meaning - but it is the
+ * order the compiler accepts. The shape it must produce is:
+ *
+ *   rootVariables: { "--bg-canvas": { light: [246,247,250], dark: [10,12,16] }, ... }
+ *
+ * which is what `npm run verify:theme` asserts after a build.
+ *
+ * FAILURE 2 - do not wrap these blocks in `@layer base`.
+ *
+ * Measured on this exact toolchain (Tailwind 3.4.19 + NativeWind 4.2.7, all
+ * three presets: web, ios, android):
+ *
+ *   inside `@layer base`       :root              KEPT
+ *   inside `@layer base`       :root.dark         SILENTLY DROPPED
+ *   inside `@layer base`       .dark              SILENTLY DROPPED
+ *   inside `@layer base`       html.dark          SILENTLY DROPPED
+ *   inside `@layer base`       [data-theme='..']  KEPT
+ *   inside `@layer components` :root.dark         DROPPED on web, kept on native
+ *   top level, no @layer       :root.dark         KEPT on all three
+ *
+ * With `darkMode: 'class'`, Tailwind treats `dark` as a reserved variant name
+ * and discards any rule in a cascade layer whose selector contains that class -
+ * with no warning and a zero exit code.
+ *
+ * Note that Failure 1 and Failure 2 produce the same symptom from two unrelated
+ * causes. That is the whole reason the check is an assertion on compiled output
+ * rather than a read of this file: this file looking correct proves nothing, and
+ * on Failure 1 it did look correct.
+ * ------------------------------------------------------------------ */
+
+:root {
+  /* --- Surfaces, back to front ------------------------------------- */
+  --bg-canvas: 246 247 250; /* app background, behind everything */
+  --bg-surface: 255 255 255; /* cards, sheets, the default panel */
+  --bg-raised: 240 242 247; /* hover, pressed, inset controls */
+  --bg-inset: 234 237 244; /* wells: code blocks, table stripes */
+
+  /* --- Lines -------------------------------------------------------- */
+  --border-subtle: 228 232 240;
+  --border-default: 205 211 224;
+
+  /* --- Text ---------------------------------------------------------
+   * Contrast measured against --bg-surface (#ffffff):
+   *   primary  16.9:1   muted  6.2:1   faint  4.6:1
+   * All three clear WCAG 2.1 AA for body text. `faint` is the floor and is
+   * not used below 12pt.                                              */
+  --text-primary: 16 19 28;
+  --text-secondary: 88 96 115;
+  --text-tertiary: 110 119 137;
+
+  /* --- Accent ------------------------------------------------------- */
+  --accent-base: 29 78 216; /* 7.0:1 on white */
+  --accent-hover: 25 66 191;
+  --accent-pressed: 21 57 165;
+  --accent-soft: 219 231 254; /* tinted background for selected states */
+  --on-accent: 255 255 255;
+
+  /* --- Severity -----------------------------------------------------
+   * One value per level, used for the icon, the border and the label. The
+   * label is always present as text as well: colour never carries the
+   * meaning on its own. See Phase 15.                                 */
+  --critical: 190 18 34; /* 6.0:1 on white */
+  --high: 179 68 7; /*  5.3:1 on white */
+  --medium: 143 95 6; /*  4.8:1 on white */
+  --info: 29 78 216; /*  7.0:1 on white */
+  --success: 4 108 78; /* 5.2:1 on white */
+}
+
+/* `.dark:root` and NOT `:root.dark` - see Failure 1 above. The two selectors are
+ * equivalent CSS; only this one survives the compiler, and the difference is
+ * invisible until someone selects the dark theme on a phone and nothing happens.
+ *
+ * This selector must stay in sync with `darkMode: 'class'` in tailwind.config.js
+ * and with `applyScheme` in src/theme. If those three disagree, dark mode
+ * silently stops working. */
+.dark:root {
+  --bg-canvas: 10 12 16;
+  --bg-surface: 20 23 30;
+  --bg-raised: 28 32 41;
+  --bg-inset: 35 40 50;
+
+  --border-subtle: 38 43 54;
+  --border-default: 55 62 76;
+
+  /* Contrast measured against --bg-surface (#14171e):
+   *   primary  15.4:1   muted  7.5:1   faint  4.6:1                     */
+  --text-primary: 240 242 247;
+  --text-secondary: 158 166 182;
+  --text-tertiary: 116 124 141;
+
+  /* The accent lightens in dark mode. A blue that reads as 7:1 on white
+   * measures about 1.8:1 on near-black, so reusing the light value would
+   * make every button and link unreadable. */
+  --accent-base: 96 156 255; /* 7.1:1 on --bg-surface */
+  --accent-hover: 126 178 255;
+  --accent-pressed: 156 200 255;
+  --accent-soft: 27 42 72;
+  --on-accent: 8 14 26;
+
+  /* Severity lightens for the same reason. The hue is preserved so a
+   * critical item still reads as red, not as a different colour. */
+  --critical: 255 138 138; /* 8.1:1 */
+  --high: 253 186 116; /*    9.6:1 */
+  --medium: 234 194 90; /* 9.5:1 */
+  --info: 125 179 255; /*    8.6:1 */
+  --success: 84 214 168; /* 10.3:1 */
+}

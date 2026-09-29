@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+web-build/
+.expo/
+expo-env.d.ts
+
+# Native build artefacts
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+android/
+ios/
+
+# Test and coverage output
+coverage/
+*.log
+npm-debug.*
+yarn-error.*
+
+# Environment. NetArchitect is offline-first and has no backend, but a developer
+# may still have a stray .env from tooling. Nothing in it is ever sent anywhere.
+.env
+.env.local
+.env.*.local
+
+# Editor and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Build output from `expo export`, used by scripts/verify-bundle.cjs. Regenerated
+# on every verification run, and measured in the tens of megabytes.
+.export-probe/
+
+# Redirected tool output. On this machine FORCE_COLOR is set, so NO_COLOR is
+# ignored and output must be written to a file to be grepped. One rule rather
+# than an enumeration of every scratch name as it gets invented.
+*-out.txt

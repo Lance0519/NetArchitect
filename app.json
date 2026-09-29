@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "NetArchitect",
+    "slug": "netarchitect",
+    "version": "1.0.0",
+
+    "scheme": "netarchitect",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+
+    "userInterfaceStyle": "automatic",
+
+    "newArchEnabled": true,
+
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.netarchitect.app"
+    },
+    "android": {
+      "package": "com.netarchitect.app",
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "backgroundColor": "#F6F7FA",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+
+    "experiments": {
+      "typedRoutes": true
+    },
+
+    "plugins": ["expo-router", "expo-sqlite", "expo-sharing", "expo-web-browser"]
+  }
+}

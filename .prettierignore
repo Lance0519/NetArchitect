@@ -1,0 +1,27 @@
+/*
+ * Prettier ignore file.
+ *
+ * Generated or vendored content, where our formatting only creates churn and
+ * where a reformat could in principle change behaviour.
+ */
+
+/* Build output. */
+.export-probe/
+dist/
+web-build/
+coverage/
+.expo/
+.expo-shared/
+
+/* Dependencies. */
+node_modules/
+
+/* Expo Router's generated route types. Regenerated on every `expo start`, and
+ * rewritten wholesale whenever a route is added or renamed. Formatting them
+ * would produce a diff on every run that has nothing to do with any edit. */
+.expo/types/
+.expo/types/**/*.ts
+
+/* Lockfiles. npm writes these; reformatting package-lock.json is not ours to do
+ * and npm will undo it on the next install. */
+package-lock.json

@@ -1,0 +1,54 @@
+# Line endings are pinned in the repository, not left to each developer's
+# `core.autocrlf`.
+#
+# Why this file exists rather than being left alone: `.prettierrc` sets
+# `endOfLine: "lf"`, and on Windows the git default is `core.autocrlf = true`.
+# With both in force and no `.gitattributes`, the working tree here is LF
+# (Prettier wrote it), git stores LF, and **a fresh clone on the same machine
+# checks out CRLF** - because autocrlf rewrites on checkout. Every file would
+# then fail `prettier --check`, and `npm run check` would fail on a clean
+# checkout while passing on the machine that produced it.
+#
+# That is the same shape as the five tooling bugs already found in this
+# project: a gate that reports green locally and means nothing elsewhere. It is
+# caught by a fresh clone, which is not something anyone does on a normal day.
+# Worth fixing precisely because it is invisible until someone else clones.
+#
+# `eol=lf` forces LF in the working tree on every platform, which is what the
+# format gate requires. It does not affect the bytes stored in the repository,
+# which git always normalises to LF for text files.
+
+# Normalise text files to LF in the working tree, on every platform.
+* text=auto eol=lf
+
+# These are not text. Without this, `text=auto` runs them through newline
+# normalisation, and a PNG that happens to contain a CRLF-looking byte pair
+# would be silently corrupted in the working tree.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.mp3 binary
+*.mp4 binary
+*.keystore binary
+*.jks binary
+*.p8 binary
+*.p12 binary
+
+# Lockfiles are machine-generated and are not ours to reformat. They stay LF
+# like everything else, but a merge conflict in one is resolved by regenerating
+# it rather than by hand, and `.gitattributes` marks it as merge=ours so a
+# casual conflict resolution cannot corrupt resolution data.
+package-lock.json merge=ours
+
+# `.expo/types/` is machine-written by Expo Router's type generation, is
+# machine-ignored in `.prettierignore` and ESLint, and should never reach a
+# merge. Ignoring it here as well means a machine that somehow lacks the
+# `.gitignore` rule still cannot commit it.
+.expo/ export-ignore
