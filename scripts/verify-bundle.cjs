@@ -189,6 +189,30 @@ for (const [label, marker, shouldBeFound] of [
     false,
   ],
   ['a plausible Phase 7 rewording is not found', 'Point-to-point links use a /31', false],
+  // Phase 8's markers, on the same terms. The planner is the third screen with real
+  // content, and it has the same trap: "NetArchitect never connects to a network" is now
+  // on three screens, so a check for that clause alone would pass against a bundle with
+  // no planner in it. Each check below is discriminated by a lead-in or a phrase that
+  // belongs to exactly one route.
+  ['a Phase 8 marker is found', 'Reallocate from host counts', true],
+  ['the planner-only lead-in is found', 'Planned on this device.', true],
+  [
+    'a copy of the Phase 7 line extended with the Phase 8 lead-in is not found',
+    'Allocated on this device. NetArchitect never connects to a network. Planned on this device.',
+    false,
+  ],
+  // Two screens share the words "Network Planner" - the VLSM hand-off button and the
+  // route heading - so the heading is checked with a phrase that only the route has.
+  ['the planner subtitle is found', 'Build a plan from a site and its needs', true],
+  ['a plausible Phase 8 rewording is not found', 'Reallocate from host counts and roles', false],
+  // The preview sheet is the only place a destructive diff is described, and it is the
+  // part most likely to be tree-shaken if a route stops resolving.
+  ['a change-preview marker is found', 'Keep what I have', true],
+  [
+    'a copy of the preview title with the cancel label is not found',
+    'Reallocate from host countsKeep what I have',
+    false,
+  ],
 ]) {
   control(label, hay.includes(marker) === shouldBeFound);
 }
@@ -272,6 +296,48 @@ for (const [label, marker] of [
   ['notice: requirements do not fit', 'These requirements do not fit'],
   // The table's own guidance, which is what tells a user the table scrolls.
   ['table scroll hint', 'Scroll the table sideways for the address columns'],
+]) {
+  check(label, hay.includes(marker), marker.length > 46 ? marker.slice(0, 46) + '...' : marker);
+}
+
+// Phase 8, the same reasoning again. The planner is the third screen with real content and
+// the same failure mode: a route that builds, exports and reports success while the
+// navigator never resolves it. The user has no VLSM hand-off to reach it by, and a
+// "Send to Network Planner" button that lands on an unresolvable route looks like a
+// dead end rather than a build failure.
+//
+// Two of the markers below are deliberately *not* the route title. "Network Planner" also
+// appears on the VLSM screen's hand-off button, so checking the bare title would pass
+// against a bundle with no planner in it - the same mistake the Phase 7 offline check
+// made and had to be fixed for. The subtitle and the lead-in below are unique to this
+// route, which is what the negative control above demonstrates.
+console.log('\n--- Phase 8: the network planner and its findings ---');
+for (const [label, marker] of [
+  ['screen subtitle', 'Build a plan from a site and its needs'],
+  ['screen empty state', 'No subnets yet'],
+  // The two operations that rewrite the plan. Both are destructive and both are behind a
+  // preview; if either is gone the feature it belongs to is unreachable, and neither is
+  // visible on screen until tapped.
+  ['repack action', 'Reallocate from host counts'],
+  ['template action', 'Start from a template'],
+  // The preview sheet. The cancel label is checked rather than the title, because the
+  // title is one of three and would not tell us which sheet this is.
+  ['preview cancel', 'Keep what I have'],
+  ['preview confirm', 'Apply this change'],
+  // The finding list, which is the Phase 8 exit criterion rendered: an overlap is
+  // representable and flagged. The word "Overlap" is also the only place the app names
+  // the condition in a list, so its absence means the finding has nowhere to show.
+  ['finding: overlap is named', 'Overlap'],
+  ['finding: outside the parent is named', 'Outside parent'],
+  ['finding: duplicate VLAN is named', 'Duplicate VLAN'],
+  ['finding explanation', 'these rows just disagree with each other'],
+  // The offline promise, third wording of the same clause. Each screen says the same
+  // thing in its own words, which is the point - the promise is repeated where a plan is
+  // made, not parked on one screen.
+  ['offline statement', 'Planned on this device. NetArchitect never connects'],
+  // The honest statement about what this screen cannot do yet. Losing it would leave a
+  // user believing their plan was saved, which is the worst thing this screen could imply.
+  ['saving is deferred, and says so', 'Saving arrives with the local database'],
 ]) {
   check(label, hay.includes(marker), marker.length > 46 ? marker.slice(0, 46) + '...' : marker);
 }

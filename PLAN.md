@@ -317,17 +317,20 @@ Status is verified against the working tree, not against intent. Re-check it bef
 | 5 — Shell, Theme, Primitives | **DONE**    | 8 routes, 14 components, `src/theme/`, 3 verification scripts                  | 18 (`cn`)        |
 | 6 — IP Calculator            | **DONE**    | `src/core/calculator-input.ts`, `src/utils/subnet-view.ts`, `src/components/CidrInput.tsx`, `src/components/IpResultCard.tsx`, real `app/(tabs)/calculator.tsx` | 291 |
 | 7 — VLSM Allocator          | **DONE**    | `src/core/roles.ts`, `src/core/vlsm-input.ts`, `src/utils/vlsm-view.ts`, `src/utils/table-layout.ts`, `src/store/vlsm-store.ts`, `src/hooks/useDebouncedValue.ts`, 3 components, real `app/(tabs)/vlsm.tsx` | 559 |
-| 8–16                         | not started | —                                                                             | —                |
+| 8 — Network Planner         | **DONE**    | `src/core/profiles.ts`, `src/core/planner-input.ts`, `src/core/plan-changes.ts`, `src/utils/planner-view.ts`, `src/store/plan-store.ts`, 3 components, real `app/(tabs)/planner.tsx` | 329 |
+| 9–16                         | not started | —                                                                             | —                |
 
-Suite: **850 passing** across 12 files. `npx tsc --noEmit` clean. `npx eslint .` clean (0 errors,
+Suite: **1179 passing** across 17 files. `npx tsc --noEmit` clean. `npx eslint .` clean (0 errors,
 0 warnings). Coverage 97.98% stmts / 94.15% branches / **100% funcs** / 98.8% lines against
-thresholds 95/90/95/95.
+thresholds 95/90/95/95. (Those coverage figures are from the Phase 7 run and have **not** been
+re-measured for Phase 8; `npm run test:coverage` is the command.)
 
 `npm run verify` is the gate, and it exits 0: typecheck → lint → format → test → `check:classes` →
 `verify:theme:all` (web/ios/android) → a real `expo export` → `verify:bundle`. Two of those steps
 exist because bugs got through every other step; see the Phase 5 section. `verify:bundle` now
-asserts 22 content markers across the two finished screens, each preceded by a negative control
-that proves the marker search discriminates.
+asserts **35 route-content markers** across the three finished screens, plus 53
+stylesheet/token/utility markers and 18 negative-control checks that prove the marker search
+discriminates.
 
 **The device gap is now the largest thing left, and it is one task, not many.** `npx expo start`
 has never been run, `npx expo-doctor` has never been run, and the following have therefore never
@@ -335,10 +338,14 @@ been looked at by a human on a real screen:
 
 - Either screen rendering at all, on either platform.
 - Light and dark mode, on a phone and on a tablet.
-- VoiceOver and TalkBack reading every field label on both screens.
+- VoiceOver and TalkBack reading every field label on all three screens.
 - The VLSM table scrolling without clipping at 320 points.
 - `SubnetBar` segments dividing evenly — plain `View`s with `flexBasis: 0; flexGrow: share`, so
   this is a rendering question with no unit-testable answer.
+- **Everything the planner screen renders.** Three components, a template sheet, a change
+  preview and seven fields per subnet row, none of it ever displayed. `rowCardTone`, the
+  `Resolved` block's em-dash alignment and the two sheets' footers are all visual claims with
+  no test behind them.
 
 Every compile-level check passes, and every one of these is invisible to a compile-level check.
 R4 makes the device pass the primary UI verification mechanism rather than a supplement, so until
@@ -1288,11 +1295,11 @@ subscription per field, a resolver, and a second validation path that has to agr
 `evaluateVlsm`. Two validation paths on one screen is how a row ends up showing an error the
 allocation ignored.
 
-Phase 8 changes the problem shape. The planner has a plan name, a description, a profile and
-a gateway per row, and it *saves* — a submit-time validation problem rather than a live-preview
-one, which is what RHF is actually for. Phase 6 declined RHF for the same reason on a smaller
-screen; this is that decision applied again, now for a second time and therefore worth writing
-down rather than repeating silently.
+Phase 8 was supposed to change the problem shape. **It did not, and this paragraph is wrong** —
+see "Phase 7's prediction about React Hook Form was wrong" in the Phase 8 section. The reasoning
+here about RHF (a second validation path that has to agree with `evaluateVlsm`) still holds, but
+the premise does not: persistence is Phase 9, so the planner has no submit and nothing to save
+yet.
 
 #### Departure 2 — no VLAN column in the table
 
@@ -1323,14 +1330,14 @@ set is the only way to get it, and that is a Phase 8 design decision.
 number should be. The screen's own logic — a five-way outcome switch — is exhaustive by
 construction, so no state falls through and leaves the user with a form and no explanation.
 
-Twelve Phase 7 markers were added to `scripts/verify-bundle.cjs`, and **the negative control
+Thirteen Phase 7 markers were added to `scripts/verify-bundle.cjs`, and **the negative control
 was extended first**. It immediately caught a marker that passed for the wrong reason: the
 offline statement was checked as bare `"NetArchitect never connects to a network"`, which is
 also on the calculator, so it was satisfied by a bundle containing no VLSM screen at all. It
 is now checked with its VLSM-only lead-in. The same control asserts that a plausible rewording
 of a notice is *not* found, so the marker is discriminating rather than merely present.
 
-`npm run verify` exits 0 against a real `expo export` with all 12 markers present.
+`npm run verify` exits 0 against a real `expo export` with all 13 markers present.
 
 #### Outstanding
 
@@ -1341,6 +1348,9 @@ tested; that the columns are legible at 320 points is not, and cannot be without
 ---
 
 ### Phase 8 — Network Planner · ~2.5 days
+
+**Status: DONE**, with three recorded departures, one design claim in this plan found to be
+undefined, and one claim from Phase 7 found to be false.
 
 **Goal:** the full VLAN plan — the app's centerpiece.
 
@@ -1363,6 +1373,184 @@ tested; that the columns are legible at 320 points is not, and cannot be without
 **Exit criteria:** the spec's School Network example builds correctly; a plan with an
 intentional overlap is _representable_ (the auditor must be able to see it) but is flagged at the
 point of creation.
+
+#### What was built
+
+Five pure modules and three components, split on the same rule as Phase 7: under R4 there is no
+render runner, so a decision that does not live in a pure module is unverified.
+
+| Module | Responsibility | Tests |
+| --- | --- | --- |
+| `src/core/profiles.ts` | `personal` / `enterprise` as names, roles and host **hints**; `profileRequirements`, `packProfile` | `tests/profiles.test.ts` (41) |
+| `src/core/planner-input.ts` | draft text → `empty \| header-invalid \| rows-invalid \| ready`, plus the row add/move/remove operations and `nextFreeVlanId` | `tests/planner-input.test.ts` (87) |
+| `src/core/plan-changes.ts` | the two destructive operations (`previewRepack`, `previewProfile`), the VLSM hand-off (`adoptHandoff`), `diffPlans`, `conflictsOf` | `tests/plan-changes.test.ts` (74) |
+| `src/utils/planner-view.ts` | draft + outcome → row views, summary figures, notices, per-row findings | `tests/planner-view.test.ts` (72) |
+| `src/store/plan-store.ts` | the draft and one pending change. No persistence — that is Phase 9 | `tests/plan-store.test.ts` (55) |
+
+Components: `SubnetEditor.tsx`, `PlanFindingList.tsx`, `ChangePreview.tsx`. Route: a real
+`app/(tabs)/planner.tsx`, which contains no arithmetic and no decisions about what a number
+should be. Its one `switch` — the exhaustive one over the four outcome kinds — lives in
+`planner-view.ts` rather than the screen, because that is where the wording it selects lives.
+
+#### The rule that shaped everything: an error and a finding are different things
+
+The Phase 8 exit criterion requires an overlap to be **representable** so the Phase 11 auditor can
+see it. That single requirement draws a line through the whole screen, and it is worth stating
+because every part of the design hangs off it:
+
+> **An entry error means a field has no parseable value. A finding means every field has a value
+> and the values disagree with each other.**
+
+So `PlannerOutcome` is a **four-state union** — `empty`, `header-invalid`, `rows-invalid`,
+`ready` — and `ready` carries a real `NetworkPlan` **plus** `findings`. The screen never refuses
+to build a plan that overlaps. If it did, the auditor would have nothing to report.
+
+`findings` has exactly three kinds: `overlap`, `outside-parent`, `duplicate-vlan`. Each carries
+**every** participating row id, never just the first, so a three-way overlap marks all three
+rows.
+
+`PlanFinding` carries **no severity**, deliberately. "These two subnets overlap" is a true
+statement about the plan; rating it `Critical` is a security judgement, and a security judgement
+made by a display layer is unattributed advice — which is the thing the standards registry in
+§1.9 exists to prevent. Phase 11 does that, with a citation and a remediation.
+
+#### Departure 1 — `profileRequirements` takes no parent CIDR
+
+The spec above sketches `profileTemplates.personal('192.168.1.0/24')` returning requirements.
+It does not take one, and `profileRequirements(profile)` takes only the profile.
+
+A profile is a *description of a site* — "a home with a trusted LAN, some IoT, guests, a lab and
+something to manage". It is not a location, and the same profile is valid in `10.0.0.0/8` and
+in `192.168.1.0/24`. Baking an address into it would make the registry a list of addresses with
+names attached, and the spec's own "**never hardcode an address in a profile**" is a rule the
+signature would have broken.
+
+Packing is a separate call: `packProfile(profile, parentCidr)`. It takes the address, and it
+**never catches** — a `ScopeExhaustionError` reaching the caller is the answer to "does this fit",
+not an error to be converted into a friendlier one.
+
+#### Departure 2 — the destructive operations return a preview, and so do their refusals
+
+`previewRepack` and `previewProfile` return a diff (`PlanChange`: the next draft, a **field-level**
+row diff, a header diff, and the conflicts the result would have) rather than editing the plan.
+The store holds one such proposal and the screen renders it in `ChangePreview` — a sheet listing
+every row that moves, every row that goes, and what would still be wrong afterwards. A yes/no
+dialog says "are you sure" without saying "sure of *what*".
+
+Three things follow from that, and each was a bug before it was a rule:
+
+- **`conflictsOf` delegates to `evaluatePlan`.** A preview that ran its own overlap check could
+  disagree with the plan screen — same inputs, two implementations, one wrong — and would show a
+  conflict that does not exist and then create one.
+- **Non-exhaustion errors are rethrown.** Only `ScopeExhaustionError` is caught and turned into
+  a refusal message. A `TypeError` inside the packer is a bug, and a store that maps every
+  thrown value to "that did not work" hides it.
+- **The store's staging actions return `string | null`, not `boolean`.** `previewRepack` refuses
+  for three different reasons — nothing to pack, no parent, requirements that do not fit — each
+  with a sentence written for the user. A `false` throws all three away, leaving a button that
+  silently does nothing, which reads as a broken app rather than as a plan that will not fit.
+  `tests/plan-store.test.ts` asserts all three messages are distinct.
+
+#### Departure 3 — `takeHandoff` declines rather than replacing a pending change
+
+The VLSM screen's hand-off is consumed from a mount effect. If a change is already staged when
+it arrives — the user opened the planner, staged a template, then navigated back and to the VLSM
+tab — replacing the proposal would discard the diff they were reading, and nobody confirmed that.
+
+The guard lives in the store rather than in the screen, because the screen cannot know what has
+happened since it mounted. It is reached only by calling `takeHandoff` twice, or once after a
+staging action, so it is an invariant rather than a timing detail.
+
+Adoption itself splits on `isUntouched`: a draft with no header text and every row blank is the
+screen's opening state, and a hand-off into that applies directly — a dialog saying "this will
+replace your 0 subnets" is a dialog about nothing. Anything else stages a preview. A row with
+*three characters* of a CIDR counts as content, because a user who typed that would be annoyed to
+lose it unasked.
+
+#### Bugs found by writing the tests, not by reading the code
+
+Eight, all in the new code, all now fixed and pinned. Recorded because the pattern matters more
+than the individual fixes — none of them would have been caught by a type-check, a lint pass, or
+an export:
+
+1. `profileRequirements` was typed `PlanDefinition` instead of `ProfileDefinition`.
+2. `parseParent` stored a non-canonical parent (`192.168.1.50/24` verbatim) instead of
+   `calculateNetworkAddress`.
+3. A wholly blank row was reported as invalid by the name check, so an untouched screen showed an
+   error. Blank rows are now skipped, not reported.
+4. `RepackOutcome`'s success arm never carried `skippedRowIds`, so a repack that worked on four of
+   five rows could not say what it did not use.
+5. `rowLabel` documented canonicalisation it did not perform.
+6. `ProfileOutcome`'s `skippedRowIds` was renamed `discardedRowIds` — the two ops discard
+   different things and the shared name hid that.
+7. `blankRow({ gateway })` could build a row whose gateway is then silently discarded by the
+   gateway-mode inference. A constructed row can no longer carry a field nothing will read.
+8. `planner-view.ts` called a non-existent `formatCount`, duplicated the em-dash literal, and used
+   a module-mutable `bindFindingCounter` to thread a finding count through. The counter was a
+   design error and was deleted: `buildPlanView` takes the count as an argument.
+
+Three of my own **test** expectations were also wrong, and the engine was right:
+
+- **50 hosts needs a `/26`** (62 usable), not a `/25`.
+- **Two aligned CIDR blocks can only overlap by containment, never by straddling** — a subnet
+  starting inside a `/24` always ends inside it, so "ends past the parent" is only testable with a
+  mid-block parent like a `/25`.
+- A test that compares two `initialPlanDraft()` calls fails on the row id alone, because
+  `newRowId` is a module-scoped counter. Four such tests were reporting a difference that did not
+  exist, and would have passed with every other field wrong.
+
+#### The spec's "School Network example" was never defined
+
+The exit criterion says "the spec's School Network example builds correctly" and this plan never
+states what it is. The numbers are given once, in the Phase 3 section, for the VLSM engine:
+`192.168.1.0/24` with **100, 50, 25 and 10** hosts, expected to give `.0/25`, `.128/26`,
+`.192/27`, `.224/28`. That four-way case is now **named and pinned** in
+`tests/profiles.test.ts` as `describe('the School Network example')`.
+
+The expected prefixes are **not** written out. Each is derived from its host count by the same
+engine call the app makes, and the *sizes* are asserted: 100 hosts needs a block with at least 100
+usable addresses, 50 needs one for 50. A test that hardcoded the four strings would still pass if
+the engine's sizing were wrong, because both sides would be wrong together. Two companions assert
+the properties that make it the *aligned* case: no gap between consecutive blocks, and
+128 + 64 + 32 + 16 = 240 of 256 addresses, freeing the last 16.
+
+#### Phase 7's prediction about React Hook Form was wrong, and it is corrected here
+
+The Phase 7 section (Departure 1, above) says RHF arrives in Phase 8 because the planner "saves"
+and RHF is good at submit-time validation. **That prediction is false about the timeline.**
+Persistence is Phase 9, so this screen has no submit and nothing to save yet. RHF is still not
+used, and the rest of the Phase 7 reasoning is unchanged and still holds: the row list is pure
+functions over an immutable draft, each tested directly, and RHF would add a subscription per
+field, a resolver, and a second validation path that has to agree with `evaluatePlan`.
+
+Recorded rather than quietly dropped, because a wrong prediction written down is worth more than
+a silent correction.
+
+#### Bundle verification
+
+Twelve Phase 8 markers were added to `scripts/verify-bundle.cjs`, and **the negative control was
+extended first**. Two of them are deliberately *not* the route title: "Network Planner" also
+appears on the VLSM screen's hand-off button, so checking the bare title would pass against a
+bundle containing no planner at all — the same mistake the Phase 7 offline check made. The
+subtitle and the planner-only lead-in are unique to the route, and the control asserts a
+cross-screen splice of the two offline statements is *not* found.
+
+Two markers exist to catch a specific silent failure: the three finding-kind labels
+(`Overlap` / `Outside parent` / `Duplicate VLAN`), which are the Phase 8 exit criterion rendered
+and would have nowhere to show if the list were dropped; and `"Saving arrives with the local
+database"`, so the screen cannot lose the only statement that this plan is **not** being saved.
+
+`npm run verify` exits 0 against a real `expo export` with all 12 markers present.
+
+#### Outstanding
+
+**Nothing the planner screen renders has been looked at.** R4 makes the device pass the primary UI
+verification mechanism, and this screen has never been on one. Specifically unverified: the
+`SubnetEditor` card stack at 320 points, the `Resolved` block's em-dash alignment, the two sheets'
+footers, the template picker scroll, and whether the per-row finding lines are readable next to
+the border tone that flags them.
+
+There is also **no save**, and the screen says so in writing rather than implying otherwise.
 
 ---
 
