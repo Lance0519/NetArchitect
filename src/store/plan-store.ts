@@ -290,6 +290,12 @@ export const selectRows = (state: PlanStore): readonly SubnetRowDraft[] => state
 /** Whether a change is waiting for the user. */
 export const selectHasPending = (state: PlanStore): boolean => state.pending !== null;
 
+/** Create a fresh blank draft. Exported for tests and the network store. */
+export const freshDraft = (): PlanDraft => initialPlanDraft();
+
+/** Reset a draft to blank. Exported for tests and the network store. */
+export const blankDraft = (): PlanDraft => resetPlanDraft();
+
 /**
  * The role a new row should default to.
  *

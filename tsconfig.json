@@ -1,10 +1,21 @@
-{
+﻿{
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     /* The engine must be provably correct, so the compiler is turned up as far
      * as it goes without becoming impractical. Each flag below has caught or
      * would have caught a real defect in this codebase. */
-    "strict": true,
+        "strict": true,
+
+    /* The test suite drives the real SQLite engine via 
+ode:sqlite, so the
+     * persistence layer is verified against actual SQL rather than a hand-written
+     * fake. That is the only way Phase 9's exit criteria - a v2 migration proven
+     * against a v1 database, a cascade leaving zero orphans - are checkable at all.
+     * This adds Node's globals to the app's type environment, so setTimeout and
+     * its siblings become overload sets and ReturnType<typeof setTimeout>
+     * resolves to NodeJS.Timeout on the few screens that use it. Verified: no
+     * call site assumes a bare number. */
+    "types": ["node"],
 
     /* Every index access returns T | undefined. This is the single most useful
      * flag here: the VLSM engine and the validator index into arrays constantly,
