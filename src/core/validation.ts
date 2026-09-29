@@ -44,6 +44,7 @@ import {
   parseIPv4,
   parsePrefix,
 } from './ip-engine';
+import { NETWORK_ROLE_TUPLE } from './roles';
 import { packVLSM } from './vlsm-engine';
 import {
   InvalidGatewayError,
@@ -187,7 +188,7 @@ export const MESSAGES = Object.freeze({
  * ================================================================== */
 
 /**
- * A single IPv4 address. `192.168.1.1` → `3232235777`.
+ * A single IPv4 address. `192.168.1.1` â†’ `3232235777`.
  *
  * Strict by delegation: leading zeros, wrong octet counts and octets above 255
  * are all rejected by `parseIPv4`, because an addressing tool that guesses is an
@@ -412,18 +413,10 @@ export const gatewaySchema = (subnet: Cidr | SubnetInfo | string) => {
  * Composite schemas
  * ================================================================== */
 
-const NETWORK_ROLES: readonly NetworkRole[] = [
-  'LAN',
-  'SERVERS',
-  'MANAGEMENT',
-  'IOT',
-  'GUEST',
-  'DMZ',
-  'VOIP',
-  'POINT_TO_POINT',
-  'CUSTOM',
-];
-
+// The role list lives in `roles.ts`, which is its single source of truth: the picker, the
+// summary card and the Phase 11 auditor all need it, and a second copy here is a second
+// list to keep in step. See the comment on NETWORK_ROLE_TUPLE for why the tuple form
+// exists.
 const PLAN_PROFILES: readonly PlanProfile[] = ['custom', 'personal', 'enterprise'];
 
 /**
@@ -483,12 +476,14 @@ export const planDescriptionSchema = z
 export const hostRequirementSchema = z
   .object({
     id: z.string().min(1).optional(),
-    name: z
-      .string()
-      .transform((value) => value.trim())
-      .pipe(z.string().min(1, { error: MESSAGES.nameRequired })),
+    // `planNameSchema`, not a local "trim then require non-empty". This used to be its
+    // own weaker rule, which meant a requirement name was the one user-facing name in the
+    // app with no length limit: a pasted paragraph reached a table cell verbatim, and
+    // `MESSAGES.nameTooLong` was unreachable from this schema. The two name rules are
+    // now one rule.
+    name: planNameSchema,
     requestedHosts: hostCountSchema,
-    role: z.enum(NETWORK_ROLES as [NetworkRole, ...NetworkRole[]]),
+    role: z.enum(NETWORK_ROLE_TUPLE as unknown as [NetworkRole, ...NetworkRole[]]),
   })
   .transform((value): HostRequirement => ({
     id: value.id ?? nextRequirementId(),
@@ -529,7 +524,7 @@ export const plannedSubnetFormSchema = z
   .object({
     id: z.string().min(1),
     name: planNameSchema,
-    role: z.enum(NETWORK_ROLES as [NetworkRole, ...NetworkRole[]]),
+    role: z.enum(NETWORK_ROLE_TUPLE as unknown as [NetworkRole, ...NetworkRole[]]),
     vlanId: optionalVlanIdSchema.optional(),
     cidr: subnetCidrSchema,
     gateway: z.string().optional(),

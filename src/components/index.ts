@@ -32,4 +32,7 @@ export { Screen, type ScreenProps } from './Screen';
 export { SegmentedControl, type SegmentedControlProps, type SegmentOption } from './SegmentedControl';
 export { Select, type SelectOption, type SelectProps } from './Select';
 export { Sheet, type SheetProps } from './Sheet';
+export { SubnetBar, type SubnetBarProps } from './SubnetBar';
+export { SubnetTable, type SubnetTableProps } from './SubnetTable';
 export { TextField, type TextFieldProps } from './TextField';
+export { VlsmRequirementList, type VlsmRequirementListProps } from './VlsmRequirementList';

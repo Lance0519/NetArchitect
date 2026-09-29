@@ -316,15 +316,33 @@ Status is verified against the working tree, not against intent. Re-check it bef
 | 4 — Validation Layer (Zod)   | **DONE**    | `src/core/validation.ts`                                                      | 100              |
 | 5 — Shell, Theme, Primitives | **DONE**    | 8 routes, 14 components, `src/theme/`, 3 verification scripts                  | 18 (`cn`)        |
 | 6 — IP Calculator            | **DONE**    | `src/core/calculator-input.ts`, `src/utils/subnet-view.ts`, `src/components/CidrInput.tsx`, `src/components/IpResultCard.tsx`, real `app/(tabs)/calculator.tsx` | 291 |
-| 7–16                         | not started | —                                                                             | —                |
+| 7 — VLSM Allocator          | **DONE**    | `src/core/roles.ts`, `src/core/vlsm-input.ts`, `src/utils/vlsm-view.ts`, `src/utils/table-layout.ts`, `src/store/vlsm-store.ts`, `src/hooks/useDebouncedValue.ts`, 3 components, real `app/(tabs)/vlsm.tsx` | 559 |
+| 8–16                         | not started | —                                                                             | —                |
 
-Suite: **631 passing** across 7 files. `npx tsc --noEmit` clean. `npx eslint .` clean (0 errors,
-0 warnings). Coverage 97.87% stmts / 95.11% branches / **100% funcs** / 98.82% lines against
+Suite: **850 passing** across 12 files. `npx tsc --noEmit` clean. `npx eslint .` clean (0 errors,
+0 warnings). Coverage 97.98% stmts / 94.15% branches / **100% funcs** / 98.8% lines against
 thresholds 95/90/95/95.
 
 `npm run verify` is the gate, and it exits 0: typecheck → lint → format → test → `check:classes` →
 `verify:theme:all` (web/ios/android) → a real `expo export` → `verify:bundle`. Two of those steps
-exist because bugs got through every other step; see the Phase 5 section.
+exist because bugs got through every other step; see the Phase 5 section. `verify:bundle` now
+asserts 22 content markers across the two finished screens, each preceded by a negative control
+that proves the marker search discriminates.
+
+**The device gap is now the largest thing left, and it is one task, not many.** `npx expo start`
+has never been run, `npx expo-doctor` has never been run, and the following have therefore never
+been looked at by a human on a real screen:
+
+- Either screen rendering at all, on either platform.
+- Light and dark mode, on a phone and on a tablet.
+- VoiceOver and TalkBack reading every field label on both screens.
+- The VLSM table scrolling without clipping at 320 points.
+- `SubnetBar` segments dividing evenly — plain `View`s with `flexBasis: 0; flexGrow: share`, so
+  this is a rendering question with no unit-testable answer.
+
+Every compile-level check passes, and every one of these is invisible to a compile-level check.
+R4 makes the device pass the primary UI verification mechanism rather than a supplement, so until
+it happens the UI is unverified — not "probably fine".
 
 **Phase 0 is still PARTIAL, and the reason is not a code gap.** The toolchain is complete and
 verified, and the git repository now exists (`main` at `352e2a6`, tracking `origin/main`, working
@@ -1154,7 +1172,10 @@ search that cannot tell those apart is not a search.
 
 ---
 
-### Phase 7 — VLSM Planner · ~1.5 days
+### Phase 7 — VLSM Allocator · ~1.5 days
+
+**Status: DONE**, with two recorded departures and one design claim in this plan found to be
+false while building it.
 
 **Goal:** requirements in, provably-correct plan out.
 
@@ -1172,6 +1193,150 @@ search that cannot tell those apart is not a search.
 
 **Exit criteria:** spec example reproduces exactly; exhaustion is recoverable (remove a
 requirement and it re-packs live); table scrolls on a phone without clipping.
+
+#### What was built
+
+Four pure modules and three components. The split is not decorative — under R4 there is no
+render runner, so any decision that is not in one of the pure modules is unverified:
+
+| Module | Responsibility | Tests |
+| --- | --- | --- |
+| `src/core/roles.ts` | `NETWORK_ROLES`, the role tuple, `ROLE_DEFINITION_BY_ROLE`, `roleLabel`, `isPointToPointRole` | `tests/roles.test.ts` (19) |
+| `src/core/vlsm-input.ts` | draft text → `empty \| parent-invalid \| rows-invalid \| exhausted \| ok`, plus `setParent`/`updateRow`/`addRow`/`removeRow`/`moveRow`/`attributeCulprit` | `tests/vlsm-input.test.ts` (62) |
+| `src/utils/vlsm-view.ts` | result → table rows, summary figures, notices, bar segments, hand-off payload, clipboard text | `tests/vlsm-view.test.ts` (95) |
+| `src/utils/table-layout.ts` | column widths, the derived scroll breakpoint, `COLUMN_ACCESSOR` | `tests/table-layout.test.ts` (21) |
+
+Components: `SubnetTable.tsx`, `SubnetBar.tsx`, `VlsmRequirementList.tsx`. State:
+`src/store/vlsm-store.ts` (draft only, plus the hand-off) and
+`src/hooks/useDebouncedValue.ts` (`tests/vlsm-store.test.ts`, 22).
+
+`roles.ts` exists because two `z.enum` sites and the VLSM engine each had a private copy of
+the role list and a private copy of `isPointToPointRole`. `ROLE_DEFINITION_BY_ROLE` is
+annotated `satisfies Record<NetworkRole, RoleDefinition>`, so a role added to the tuple
+without a definition is a compile error rather than an `undefined` read at runtime.
+
+The draft mutations are **pure functions in `vlsm-input.ts`**, not store actions, and the
+store delegates to them. That is what lets `tests/vlsm-store.test.ts` compare the store
+against the pure function and get a real assertion instead of a restatement.
+
+#### The engine's `ALIGNMENT_FRAGMENTATION` branch is currently unreachable
+
+`packVLSM` can throw `ScopeExhaustionError` with `reason: 'ALIGNMENT_FRAGMENTATION'`, and
+`vlsm-input.ts` is written to attribute it to the row that caused the stranding. **Through
+`packVLSM` today that path is not reachable**: the pre-flight total check fires first, and
+once a block of a given power-of-two size is placed, alignment of the next one cannot strand
+anything the total check has not already rejected. The canonical fragmentation case —
+`packVLSM('10.0.0.0/28', [LAN 3, P2P 2, LAN 2])` → `10.0.0.0/29`, `10.0.0.8/31`,
+`10.0.0.12/30`, stranding `10.0.0.10/31` — is a *successful* pack that reports free space, not
+an error.
+
+There is a characterisation test in `tests/vlsm-input.test.ts` asserting this. It is
+deliberately written to **fail loudly** if the engine ever changes so that the branch becomes
+reachable, because the alternative is code that has never executed being trusted because it
+reads correctly.
+
+#### Fix suggestions are verified, not computed
+
+When requirements do not fit, the screen offers a wider parent. `findWorkingParent` does not
+calculate one — it calls `packVLSM` into each of four wider prefixes and returns a prefix
+only if that pack actually succeeds. Widening also **renormalises the network address**:
+`192.168.1.0/23` widens to `192.168.0.0/23`, not `192.168.1.0/23`, because the latter is not
+a valid `/23` boundary. Returns `null` when nothing provably works, and the screen then says
+so rather than guessing.
+
+Exhaustion is attributed to a row **by row id, and only when the blamed name is carried by
+exactly one row.** Two requirements called `LAN` cannot be told apart by name, so the message
+names the block size instead of guessing which one was at fault. `attributeCulprit` is
+exported so this is tested directly rather than through the screen.
+
+#### Two real bugs found and fixed while building this
+
+**`hostRequirementSchema` had a weaker name rule than `planNameSchema`.** It enforced
+non-empty and nothing else, which made `MESSAGES.nameTooLong` unreachable from it — a message
+written for a rule that no longer applied to that path. It now reuses `planNameSchema`, as
+`plannedSubnetFormSchema` already did.
+
+**`stageHandoff` left a stale hand-off in the store when it failed.** Editing a requirement
+until the plan no longer fits returned `false` — but the previously staged payload stayed in
+the store. The return value was the only thing standing between that stale plan and the
+planner. It now clears on failure: a store whose contents can contradict its own input is
+worse than one that is simply empty. Found by a test that was trying to do something else.
+
+#### A copy error corrected against the engine
+
+The summary's "host efficiency" figure was described in an early draft of this plan as
+requested-over-capacity. The engine's `hostEfficiencyPercent` is `usableHosts /
+allocatedAddresses` — network and broadcast overhead, not requirement fit. The figure's detail
+line now says "of allocated addresses can be assigned to hosts", which is what the number
+actually measures.
+
+Relatedly, the "mostly unused" notice is **per-block**, computed by the view model from each
+allocation's existing `utilisationPercent` against a fixed `LOW_UTILISATION_PERCENT = 66.7`,
+and it names the offending row. No division happens in the view model. The threshold is a
+fixed number on purpose: any formula would be a claim about what a good VLSM plan looks like,
+and two thirds is a fact about the block rather than a judgement about the plan.
+
+#### Departure 1 — no React Hook Form, deferred to Phase 8
+
+The plan names RHF + `useFieldArray` for this screen. It is not used, and this is the phase
+that was supposed to use it.
+
+What RHF would have solved is a growing, reorderable list of rows — and that list is four
+pure functions over an immutable draft, each tested directly. `useFieldArray` is a way to
+manage that state; it is not the reason the state is correct. What it would have *added* is a
+subscription per field, a resolver, and a second validation path that has to agree with
+`evaluateVlsm`. Two validation paths on one screen is how a row ends up showing an error the
+allocation ignored.
+
+Phase 8 changes the problem shape. The planner has a plan name, a description, a profile and
+a gateway per row, and it *saves* — a submit-time validation problem rather than a live-preview
+one, which is what RHF is actually for. Phase 6 declined RHF for the same reason on a smaller
+screen; this is that decision applied again, now for a second time and therefore worth writing
+down rather than repeating silently.
+
+#### Departure 2 — no VLAN column in the table
+
+The plan lists VLAN as optional in this table, and it is omitted because this screen has no
+VLAN input. A column of dashes teaches the reader nothing. VLAN IDs arrive with the hand-off
+to the Network Planner, which is the screen that collects them.
+
+#### The grid layout is real but unreachable on any device this app targets
+
+The plan asks for a non-scrolling grid on wide screens. `usesGridLayout` exists and the branch
+renders, but the breakpoint is **derived** from the column widths rather than typed, and the
+derived value is **1132 points** — wider than an iPad in either orientation (768 portrait, 1024
+landscape). Ten columns of IPv4 data plus a pinned name column do not fit.
+
+So the scrolling layout is what every phone *and every tablet* gets. The grid is reached on a
+desktop browser or a very wide window. This was found by a test written expecting a tablet to
+reach the grid and failing; the test is now pinned to assert the true value, with a comment
+saying that if it starts passing because a column was narrowed, the documentation above it is
+now wrong and needs rewriting in the same change.
+
+Narrowing the columns to buy the tablet layout would mean either clipping an address or
+dropping a column, and a half-readable table is worse than a scrolling one. A shorter column
+set is the only way to get it, and that is a Phase 8 design decision.
+
+#### Verification
+
+`app/(tabs)/vlsm.tsx` contains one `switch`, no arithmetic, and no decision about what a
+number should be. The screen's own logic — a five-way outcome switch — is exhaustive by
+construction, so no state falls through and leaves the user with a form and no explanation.
+
+Twelve Phase 7 markers were added to `scripts/verify-bundle.cjs`, and **the negative control
+was extended first**. It immediately caught a marker that passed for the wrong reason: the
+offline statement was checked as bare `"NetArchitect never connects to a network"`, which is
+also on the calculator, so it was satisfied by a bundle containing no VLSM screen at all. It
+is now checked with its VLSM-only lead-in. The same control asserts that a plausible rewording
+of a notice is *not* found, so the marker is discriminating rather than merely present.
+
+`npm run verify` exits 0 against a real `expo export` with all 12 markers present.
+
+#### Outstanding
+
+The Phase 7 exit criterion "table scrolls on a phone without clipping" is **not verified**. It
+is a visual claim about a device this project has never run on. The breakpoint arithmetic is
+tested; that the columns are legible at 320 points is not, and cannot be without a device.
 
 ---
 

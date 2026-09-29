@@ -41,13 +41,11 @@ import {
   toUint32,
 } from './ip-engine';
 import { ScopeExhaustionError, SubnetOverlapError } from './errors';
+import { isPointToPointRole } from './roles';
 import { STANDARD_REFS } from './standards';
 
 /** A free fragment smaller than a /29 cannot usefully host anything. */
 const USABLE_FRAGMENT_SIZE = 8;
-
-/** Requirement roles that should be packed as RFC 3021 point-to-point links. */
-const isPointToPointRole = (role: HostRequirement['role']): boolean => role === 'POINT_TO_POINT';
 
 /**
  * Pack requirements into a parent network using Variable Length Subnet Masking.

@@ -172,6 +172,23 @@ for (const [label, marker, shouldBeFound] of [
   // it would let a half-width string pass against a full-width one, which is the
   // class of near-miss that makes a green gate meaningless.
   ['a full-width homoglyph is not found', '／31 is a point-to-point link', false],
+  // Phase 7's own markers, on the same terms. The offline statement above was originally
+  // checked as a bare "NetArchitect never connects to a network", which is shared with
+  // the calculator - so it passed against a bundle that contained no VLSM screen at all.
+  // A check that cannot tell two screens apart is a check about the wrong screen.
+  ['a Phase 7 marker is found', 'Point-to-point links are sized as /31', true],
+  ['another Phase 7 marker is found', 'Send to Network Planner', true],
+  // The lead-in the offline marker above is discriminated by. Checking that it is found
+  // is the real assertion; the negative half is the rewording below, not the calculator's
+  // own line - an earlier version of this control asserted that the calculator's copy
+  // was absent, which is false, because the calculator screen is in the bundle too.
+  ['the VLSM-only lead-in is found', 'Allocated on this device.', true],
+  [
+    'a copy of the Phase 6 line extended with the Phase 7 lead-in is not found',
+    'Computed on this device. NetArchitect never connects to a network. Allocated on this device.',
+    false,
+  ],
+  ['a plausible Phase 7 rewording is not found', 'Point-to-point links use a /31', false],
 ]) {
   control(label, hay.includes(marker) === shouldBeFound);
 }
@@ -213,6 +230,48 @@ for (const [label, marker] of [
   ['notice: /30 has two', 'Only two usable addresses'],
   // The citation, which proves the view model shipped rather than only the screen.
   ['citation RFC 3021', 'RFC 3021'],
+]) {
+  check(label, hay.includes(marker), marker.length > 46 ? marker.slice(0, 46) + '...' : marker);
+}
+
+// Phase 7, same reasoning as Phase 6 above. The VLSM screen is the second screen with
+// real content, and the failure mode is identical: a route that builds, exports and
+// reports success while the navigator never resolves it, leaving the user with no way to
+// reach a feature the plan says exists.
+//
+// The strings below are the ones that carry meaning rather than chrome. A screen title
+// proves the route shipped; a standards citation and the specific notice copy prove the
+// view model shipped, which is the part most likely to be tree-shaken and the part a
+// screenshot would not reveal.
+console.log('\n--- Phase 7: the VLSM allocator and its confirmed rules ---');
+for (const [label, marker] of [
+  ['screen heading', 'VLSM Allocator'],
+  ['screen subtitle', 'Fit variable-length subnets into a parent block'],
+  ['screen empty state', 'No requirements yet'],
+  // The hand-off. If this is gone the button navigated to a planner it could not have
+  // been given anything for - a dead end with no error, which is the worst shape a
+  // broken feature can take.
+  ['hand-off action', 'Send to Network Planner'],
+  ['copy action', 'Copy as a table'],
+  // The offline promise, restated on the screen that writes plans. The lead-in matters:
+  // the shared clause "NetArchitect never connects to a network" is on the calculator
+  // too, so grepping that alone would pass on a bundle with no VLSM screen in it at all.
+  // Found by the negative control below, after the first version of this check passed
+  // against a Phase 6 bundle.
+  ['offline statement', 'Allocated on this device. NetArchitect never connects'],
+  // The three explanations the plan asked for by name, each with its citation. A
+  // citation is the strongest available evidence that the notice came from the view
+  // model and not from a hand-written placeholder in the component.
+  ['notice: /31 is RFC 3021', 'Point-to-point links are sized as /31'],
+  ['citation RFC 3021', 'RFC 3021'],
+  ['notice: alignment strands addresses', 'Some free space is too small to use'],
+  ['citation RFC 7600', 'RFC 7600'],
+  ['notice: parent fully allocated', 'The parent is fully allocated'],
+  // The exhaustion path, which has no result to show and so is the easiest state to
+  // lose in a refactor that only ever tested the happy path.
+  ['notice: requirements do not fit', 'These requirements do not fit'],
+  // The table's own guidance, which is what tells a user the table scrolls.
+  ['table scroll hint', 'Scroll the table sideways for the address columns'],
 ]) {
   check(label, hay.includes(marker), marker.length > 46 ? marker.slice(0, 46) + '...' : marker);
 }
