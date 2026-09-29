@@ -352,7 +352,7 @@ R4 makes the device pass the primary UI verification mechanism rather than a sup
 it happens the UI is unverified — not "probably fine".
 
 **Phase 0 is still PARTIAL, and the reason is not a code gap.** The toolchain is complete and
-verified, and the git repository now exists (`main` at `352e2a6`, tracking `origin/main`, working
+verified, and the git repository now exists (`main` at `5da50e8`, tracking `origin/main`, working
 tree clean). What remains is that `npx expo start` has **never been executed**, so "renders on one
 Android and one iOS device" — Phase 0's own exit criterion, and the prerequisite for Phase 5's —
 remains entirely unmeasured. The exact outstanding work is listed under each phase below.
