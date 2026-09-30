@@ -117,10 +117,10 @@ export default function SettingsScreen() {
 
           <View className="gap-1 border-t border-line-subtle pt-2.5">
             <AppText variant="caption" tone="faint">
-              Released as Open Source software under the MIT License.
+              Copyright © 2026 Justine Lance Martin (Lance0519). All Rights Reserved.
             </AppText>
             <AppText variant="caption" tone="faint">
-              Copyright © 2026 Lance0519. All rights reserved under terms of the MIT License.
+              Proprietary software. Unauthorized copying, distribution, or modification is prohibited.
             </AppText>
             <AppText variant="caption" tone="faint" className="mt-1">
               NetArchitect performs local static analysis. It does not scan, test, or connect to any network.

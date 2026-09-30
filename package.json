@@ -2,8 +2,8 @@
   "name": "netarchitect",
   "version": "1.0.0",
   "description": "Offline-first IPv4 Subnet Calculator, VLSM Allocator, Network Planner & Security Auditor",
-  "author": "Lance0519 <justinelance0067@gmail.com>",
-  "license": "MIT",
+  "author": "Justine Lance Martin (Lance0519) <justinelance0067@gmail.com>",
+  "license": "UNLICENSED",
   "repository": {
     "type": "git",
     "url": "https://github.com/Lance0519/NetArchitect.git"

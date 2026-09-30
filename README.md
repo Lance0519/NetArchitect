@@ -98,6 +98,6 @@ npm run check
 
 ## License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+Copyright (c) 2026 Justine Lance Martin (Lance0519). All Rights Reserved.
 
-Copyright (c) 2026 Lance0519.
+This software is proprietary. Unauthorized copying, distribution, modification, or commercial use is strictly prohibited. See the [LICENSE](LICENSE) file for terms.
