@@ -18,9 +18,11 @@
  * frame budget), the change is local to this module - the callers already
  * treat `withTransaction` as an opaque boundary.
  */
+import { Platform } from 'react-native';
 import { openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
 
 import { runMigrations } from './migrations';
+import { createWebFallbackDatabase } from './web-fallback';
 
 /** The singleton database handle. Initialized on first call to `openDatabase`. */
 let dbHandle: SQLiteDatabase | null = null;
@@ -31,19 +33,38 @@ let dbHandle: SQLiteDatabase | null = null;
  * Called once at app start (in `_layout.tsx`) and thereafter returns the
  * cached handle. `runMigrations` is idempotent: if `user_version` is already
  * at `SCHEMA_VERSION` it returns immediately.
+ *
+ * If running on web without SharedArrayBuffer (missing COOP/COEP or unsupported
+ * browser context), falls back to a web storage implementation to prevent crashes.
  */
 export const openDatabase = (): SQLiteDatabase => {
   if (dbHandle !== null) return dbHandle;
 
-  // `expo-sqlite` stores the file in the app's sandboxed documents directory.
-  // The filename is stable, so the same database is opened on every launch.
-  dbHandle = openDatabaseSync('netarchitect.db');
+  const isWeb = Platform.OS === 'web' || typeof window !== 'undefined';
+  const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
 
-  // Run migrations on every open. The cost is a few microseconds when current,
-  // and the one-time DDL cost on first launch or after a version bump.
-  runMigrations(dbHandle as any);
+  if (isWeb && !hasSharedArrayBuffer) {
+    dbHandle = createWebFallbackDatabase();
+    return dbHandle;
+  }
 
-  return dbHandle;
+  try {
+    // `expo-sqlite` stores the file in the app's sandboxed documents directory.
+    // The filename is stable, so the same database is opened on every launch.
+    dbHandle = openDatabaseSync('netarchitect.db');
+
+    // Run migrations on every open. The cost is a few microseconds when current,
+    // and the one-time DDL cost on first launch or after a version bump.
+    runMigrations(dbHandle as any);
+
+    return dbHandle;
+  } catch (err) {
+    if (isWeb) {
+      dbHandle = createWebFallbackDatabase();
+      return dbHandle;
+    }
+    throw err;
+  }
 };
 
 /**
@@ -77,7 +98,7 @@ export const resetDatabase = (): void => {
 /**
  * Helper to run a SELECT query and return all rows.
  */
-export const selectAll = <T,>(db: SQLiteDatabase, sql: string, ...params: Array<string | number | null>): T[] => {
+export const selectAll = <T,>(db: SQLiteDatabase, sql: string, ...params: (string | number | null)[]): T[] => {
   const stmt = db.prepareSync(sql);
   try {
     return stmt.executeSync(params).getAllSync() as T[];
@@ -89,7 +110,7 @@ export const selectAll = <T,>(db: SQLiteDatabase, sql: string, ...params: Array<
 /**
  * Helper to run a SELECT query and return the first row.
  */
-export const selectOne = <T,>(db: SQLiteDatabase, sql: string, ...params: Array<string | number | null>): T | null => {
+export const selectOne = <T,>(db: SQLiteDatabase, sql: string, ...params: (string | number | null)[]): T | null => {
   const stmt = db.prepareSync(sql);
   try {
     return stmt.executeSync(params).getFirstSync() as T | null;
@@ -101,7 +122,7 @@ export const selectOne = <T,>(db: SQLiteDatabase, sql: string, ...params: Array<
 /**
  * Helper to run an INSERT/UPDATE/DELETE query.
  */
-export const execute = (db: SQLiteDatabase, sql: string, ...params: Array<string | number | null>): void => {
+export const execute = (db: SQLiteDatabase, sql: string, ...params: (string | number | null)[]): void => {
   const stmt = db.prepareSync(sql);
   try {
     stmt.executeSync(params);

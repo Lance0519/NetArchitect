@@ -26,6 +26,7 @@ import {
   calculateUsableHosts,
   calculateUtilization,
   calculateWildcardMask,
+  computeHostAllocation,
   calculateHostBits,
   calculateNetworkBits,
   cidrRange,
@@ -953,5 +954,78 @@ describe('remaining public helpers', () => {
       const mask = cidrToMask(prefix);
       expect((mask | wildcardFromMask(mask)) >>> 0).toBe(U32_MAX);
     }
+  });
+
+  describe('computeHostAllocation', () => {
+    it('allocates gateway, static infrastructure (.2-.10), and DHCP pool (.11+) on a /24', () => {
+      const alloc = computeHostAllocation('192.168.1.0/24');
+      expect(alloc.networkAddress).toBe('192.168.1.0');
+      expect(alloc.gateway).toBe('192.168.1.1');
+      expect(alloc.staticRange).toEqual({
+        start: '192.168.1.2',
+        end: '192.168.1.10',
+        count: 9,
+      });
+      expect(alloc.dhcpPool).toEqual({
+        start: '192.168.1.11',
+        end: '192.168.1.254',
+        count: 244,
+      });
+      expect(alloc.broadcastAddress).toBe('192.168.1.255');
+      expect(alloc.totalAssignable).toBe(254);
+    });
+
+    it('honors a custom gateway assignment', () => {
+      const alloc = computeHostAllocation('10.0.0.0/24', '10.0.0.254');
+      expect(alloc.gateway).toBe('10.0.0.254');
+    });
+
+    it('handles smaller subnets like /28 proportionally', () => {
+      const alloc = computeHostAllocation('172.16.1.0/28');
+      expect(alloc.networkAddress).toBe('172.16.1.0');
+      expect(alloc.gateway).toBe('172.16.1.1');
+      expect(alloc.staticRange?.start).toBe('172.16.1.2');
+      expect(alloc.dhcpPool?.end).toBe('172.16.1.14');
+      expect(alloc.broadcastAddress).toBe('172.16.1.15');
+      expect(alloc.totalAssignable).toBe(14);
+    });
+
+    it('handles /30 point-to-point subnets with 2 assignable hosts', () => {
+      const alloc = computeHostAllocation('10.0.0.0/30');
+      expect(alloc.networkAddress).toBe('10.0.0.0');
+      expect(alloc.gateway).toBe('10.0.0.1');
+      expect(alloc.staticRange).toEqual({
+        start: '10.0.0.2',
+        end: '10.0.0.2',
+        count: 1,
+      });
+      expect(alloc.dhcpPool).toBeNull();
+      expect(alloc.broadcastAddress).toBe('10.0.0.3');
+      expect(alloc.totalAssignable).toBe(2);
+    });
+
+    it('handles RFC 3021 /31 point-to-point links with no broadcast overhead', () => {
+      const alloc = computeHostAllocation('10.0.0.0/31');
+      expect(alloc.networkAddress).toBe('10.0.0.0');
+      expect(alloc.gateway).toBe('10.0.0.0');
+      expect(alloc.staticRange).toEqual({
+        start: '10.0.0.1',
+        end: '10.0.0.1',
+        count: 1,
+      });
+      expect(alloc.dhcpPool).toBeNull();
+      expect(alloc.broadcastAddress).toBeNull();
+      expect(alloc.totalAssignable).toBe(2);
+    });
+
+    it('handles /32 host routes', () => {
+      const alloc = computeHostAllocation('10.0.0.5/32');
+      expect(alloc.networkAddress).toBe('10.0.0.5');
+      expect(alloc.gateway).toBe('10.0.0.5');
+      expect(alloc.staticRange).toBeNull();
+      expect(alloc.dhcpPool).toBeNull();
+      expect(alloc.broadcastAddress).toBeNull();
+      expect(alloc.totalAssignable).toBe(1);
+    });
   });
 });

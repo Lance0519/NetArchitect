@@ -37,7 +37,8 @@ import {
 } from 'react-native';
 import { CircleAlert } from 'lucide-react-native';
 
-import { AppText } from '@/components/AppText';
+import { AppText } from './AppText';
+import { useTheme } from '@/theme';
 import { FONTS } from '@/theme/typography';
 import { cn } from '@/utils/cn';
 
@@ -66,6 +67,8 @@ export const TextField = forwardRef<RNTextInput, TextFieldProps>(function TextFi
   // since a VLSM screen has several "Host count" fields - and a duplicated id
   // makes the label point at the wrong input for every assistive technology that
   // resolves it.
+  const { scheme } = useTheme();
+  const defaultPlaceholderColor = scheme === 'dark' ? '#94A3B8' : '#64748B';
   const generatedId = useId();
   const inputId = id ?? `field-${generatedId}`;
   const hasError = error !== undefined && error.length > 0;
@@ -90,7 +93,7 @@ export const TextField = forwardRef<RNTextInput, TextFieldProps>(function TextFi
           // what makes a validation message usable rather than merely visible.
           accessibilityHint={hasError ? error : hint}
           aria-invalid={hasError}
-          placeholderTextColor="rgb(var(--text-tertiary))"
+          placeholderTextColor={rest.placeholderTextColor ?? defaultPlaceholderColor}
           className={cn(
             'flex-1 py-2.5 text-body text-ink',
             // A multiline field must be able to grow; `flex-1` on a fixed-height

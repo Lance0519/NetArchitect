@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Snackbar - a transient bottom notification with an optional action.
  *
  * ## Why not a third-party library
@@ -22,7 +22,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Animated, Easing, PanResponder } from 'react-native';
 import { X } from 'lucide-react-native';
 
-import { AppText, Button, Card } from '@/components';
+import { AppText } from './AppText';
+import { Button } from './Button';
+import { Card } from './Card';
 import { cn } from '@/utils/cn';
 
 export interface SnackbarProps {
@@ -78,7 +80,7 @@ export function Snackbar({
   }, [visible, onDismiss]);
 
   // Animate in
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   useEffect(() => {
     Animated.timing(translateY.current, {
       toValue: 0,
@@ -89,7 +91,7 @@ export function Snackbar({
   }, []);
 
   // Auto-dismiss timer
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   useEffect(() => {
     const timer = setTimeout(dismiss, duration);
     return () => clearTimeout(timer);

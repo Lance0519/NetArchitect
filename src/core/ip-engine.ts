@@ -31,7 +31,7 @@
  * which is what keeps this module string-free and testable.
  */
 
-import type { AddressRange, Cidr, ReservedRangeKind, SubnetInfo } from '../types/network';
+import type { AddressRange, Cidr, HostAllocationPlan, ReservedRangeKind, SubnetInfo } from '../types/network';
 import {
   InvalidCIDRError,
   InvalidHostCountError,
@@ -649,3 +649,100 @@ export function calculateUtilization(used: number, capacity: number): number {
 
 /** Utilisation rounded to two decimals, for display. */
 export const roundPercent = (value: number): number => Math.round(value * 100) / 100;
+
+/* ------------------------------------------------------------------ *
+ * Host Allocation Planning
+ * ------------------------------------------------------------------ */
+
+/**
+ * Compute the recommended per-subnet host allocation plan.
+ * Reserves gateway, static infrastructure, and dynamic DHCP pool.
+ */
+export function computeHostAllocation(
+  cidrInput: string,
+  customGateway?: string,
+): HostAllocationPlan {
+  const cidr = parseCidr(cidrInput);
+  const info = calculateSubnet(cidr.ip, cidr.prefix);
+
+  const netStr = integerToIPv4(info.networkAddress);
+
+  if (info.isHostRoute) {
+    return {
+      networkAddress: netStr,
+      gateway: customGateway ?? netStr,
+      staticRange: null,
+      dhcpPool: null,
+      broadcastAddress: null,
+      totalAssignable: 1,
+    };
+  }
+
+  if (info.isPointToPoint) {
+    const host0 = integerToIPv4(info.firstUsableHost);
+    const host1 = integerToIPv4(info.lastUsableHost);
+    return {
+      networkAddress: netStr,
+      gateway: customGateway ?? host0,
+      staticRange: {
+        start: host1,
+        end: host1,
+        count: 1,
+      },
+      dhcpPool: null,
+      broadcastAddress: null,
+      totalAssignable: 2,
+    };
+  }
+
+  const bcastStr = integerToIPv4(info.broadcastAddress);
+
+  if (info.usableHosts <= 2) {
+    const gw = customGateway ?? integerToIPv4(info.firstUsableHost);
+    const peer = integerToIPv4(info.lastUsableHost);
+    return {
+      networkAddress: netStr,
+      gateway: gw,
+      staticRange: {
+        start: peer,
+        end: peer,
+        count: 1,
+      },
+      dhcpPool: null,
+      broadcastAddress: bcastStr,
+      totalAssignable: 2,
+    };
+  }
+
+  const gw = customGateway ?? integerToIPv4(info.firstUsableHost);
+  const usable = info.usableHosts;
+
+  // Reserve static infrastructure: e.g. .2 - .10 for /24, or up to 15% for smaller subnets
+  const staticCount = Math.max(1, Math.min(9, Math.floor(usable * 0.15)));
+  const staticStart = (info.firstUsableHost + 1) >>> 0;
+  const staticEnd = (staticStart + staticCount - 1) >>> 0;
+
+  const dhcpStart = (staticEnd + 1) >>> 0;
+  const dhcpEnd = info.lastUsableHost;
+  const dhcpCount = dhcpEnd >= dhcpStart ? dhcpEnd - dhcpStart + 1 : 0;
+
+  return {
+    networkAddress: netStr,
+    gateway: gw,
+    staticRange: {
+      start: integerToIPv4(staticStart),
+      end: integerToIPv4(staticEnd),
+      count: staticCount,
+    },
+    dhcpPool:
+      dhcpCount > 0
+        ? {
+            start: integerToIPv4(dhcpStart),
+            end: integerToIPv4(dhcpEnd),
+            count: dhcpCount,
+          }
+        : null,
+    broadcastAddress: bcastStr,
+    totalAssignable: usable,
+  };
+}

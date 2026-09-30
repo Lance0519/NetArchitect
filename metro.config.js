@@ -16,4 +16,19 @@ const { withNativeWind } = require('nativewind/metro');
 
 const config = getDefaultConfig(__dirname);
 
+if (!config.resolver.assetExts.includes('wasm')) {
+  config.resolver.assetExts.push('wasm');
+}
+
+config.server = config.server || {};
+const previousMiddleware = config.server.enhanceMiddleware;
+config.server.enhanceMiddleware = (middleware, server) => {
+  const enhanced = previousMiddleware ? previousMiddleware(middleware, server) : middleware;
+  return (req, res, next) => {
+    res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    return enhanced(req, res, next);
+  };
+};
+
 module.exports = withNativeWind(config, { input: './global.css' });

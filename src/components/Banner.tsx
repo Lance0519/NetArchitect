@@ -29,7 +29,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 
-import { AppText } from '@/components/AppText';
+import { AppText } from './AppText';
 import { cn } from '@/utils/cn';
 
 export type BannerTone = 'info' | 'success' | 'warn' | 'error';

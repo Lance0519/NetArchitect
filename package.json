@@ -1,6 +1,13 @@
-﻿{
+{
   "name": "netarchitect",
   "version": "1.0.0",
+  "description": "Offline-first IPv4 Subnet Calculator, VLSM Allocator, Network Planner & Security Auditor",
+  "author": "Lance0519 <justinelance0067@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Lance0519/NetArchitect.git"
+  },
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/metro-runtime": "~57.0.16",
@@ -34,7 +41,8 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3",    "@types/react": "~19.2.2",
+    "@types/node": "^26.6.3",
+    "@types/react": "~19.2.2",
     "@vitest/coverage-v8": "^4.1.11",
     "babel-preset-expo": "^57.0.13",
     "eslint": "^9.39.5",
@@ -47,8 +55,8 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -58,19 +66,18 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "doctor": "expo-doctor",
-
+    "doctor": "npx expo-doctor",
     "export:probe": "expo export --platform android --output-dir .export-probe --clear",
+    "export:probe:web": "expo export --platform web --output-dir .export-probe-web --clear",
     "verify:theme": "node scripts/verify-theme.cjs",
     "verify:theme:all": "node scripts/verify-theme.cjs web && node scripts/verify-theme.cjs ios && node scripts/verify-theme.cjs android",
     "verify:bundle": "node scripts/verify-bundle.cjs",
+    "verify:bundle:web": "node scripts/verify-bundle-web.cjs",
     "check:classes": "node scripts/check-class-order.cjs",
-
     "//check": "typecheck + lint + format + test + the stylesheet assertion + the class-order rule. The last two are in here, not optional, because both catch failures that every other step in this chain reports as green: two bugs in global.css left the app permanently in light mode, and a misordered cn() argument silently stops a component honouring a caller's rounded-*/max-w-*/p-* override. A gate that cannot catch a bug is not a gate.",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run check:classes && npm run verify:theme:all",
-
-    "//verify": "the full release gate: everything in `check`, then a real Android build, then an assertion against the resulting Hermes bundle.",
-    "verify": "npm run check && npm run export:probe && npm run verify:bundle"
+    "//verify": "the full release gate: everything in `check`, then real Android and web builds, then assertions against the resulting bundles.",
+    "verify": "npm run check && npm run export:probe && npm run verify:bundle && npm run export:probe:web && npm run verify:bundle:web"
   },
   "private": true
 }

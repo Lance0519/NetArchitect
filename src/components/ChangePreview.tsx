@@ -35,7 +35,11 @@ import { type ReactNode } from 'react';
 import { View } from 'react-native';
 import { AlertTriangle, ArrowRight, Minus, Plus } from 'lucide-react-native';
 
-import { AppText, Button, Card, Divider, Sheet } from '@/components';
+import { AppText } from './AppText';
+import { Button } from './Button';
+import { Card } from './Card';
+import { Divider } from './Divider';
+import { Sheet } from './Sheet';
 import { rowLabel } from '@/core/plan-changes';
 import { EM_DASH } from '@/utils/formatting';
 

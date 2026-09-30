@@ -34,15 +34,17 @@
  * from the picker while present in the engine.
  */
 
-import { View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react-native';
 
-import { AppText, Card, IconButton, Select, TextField } from '@/components';
+import { AppText } from './AppText';
+import { IconButton } from './Button';
+import { Card } from './Card';
+import { TextField } from './TextField';
 import { NETWORK_ROLES, ROLE_DEFINITION_BY_ROLE } from '@/core/roles';
 import { cn } from '@/utils/cn';
 
 import type { VlsmRowDraft } from '@/core/vlsm-input';
-import type { NetworkRole } from '@/types/network';
 
 export interface VlsmRequirementListProps {
   readonly rows: readonly VlsmRowDraft[];
@@ -106,14 +108,14 @@ export function VlsmRequirementList({
                   // nothing is worse than one that visibly is not.
                   disabled={index === 0}
                 >
-                  <ArrowUp size={16} strokeWidth={2.5} />
+                  <ArrowUp size={16} strokeWidth={2.5} className="text-ink-muted" />
                 </IconButton>
                 <IconButton
                   label={`Move ${row.name || `requirement ${index + 1}`} down`}
                   onPress={() => onMove(row.id, 1)}
                   disabled={index === rows.length - 1}
                 >
-                  <ArrowDown size={16} strokeWidth={2.5} />
+                  <ArrowDown size={16} strokeWidth={2.5} className="text-ink-muted" />
                 </IconButton>
                 <IconButton
                   label={`Remove ${row.name || `requirement ${index + 1}`}`}
@@ -123,7 +125,7 @@ export function VlsmRequirementList({
                   // way back but a reset, and emptying itself looks like data loss.
                   disabled={!canRemove}
                 >
-                  <Trash2 size={16} strokeWidth={2.5} />
+                  <Trash2 size={16} strokeWidth={2.5} className="text-critical" />
                 </IconButton>
               </View>
             </View>
@@ -155,13 +157,45 @@ export function VlsmRequirementList({
               mono
             />
 
-            <Select<NetworkRole>
-              label="Role"
-              value={row.role}
-              options={ROLE_OPTIONS}
-              onChange={(role) => onChange(row.id, { role })}
-              hint={ROLE_DEFINITION_BY_ROLE[row.role].description}
-            />
+            <View className="gap-1.5">
+              <AppText variant="label" tone="muted">
+                Role
+              </AppText>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+              >
+                {ROLE_OPTIONS.map((opt) => {
+                  const isSelected = row.role === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: isSelected }}
+                      accessibilityLabel={opt.label}
+                      onPress={() => onChange(row.id, { role: opt.value })}
+                      className={cn(
+                        'min-h-[36px] flex-row items-center justify-center rounded-pill border px-3 py-1.5',
+                        isSelected
+                          ? 'border-accent bg-accent'
+                          : 'border-line bg-surface active:bg-surface-raised',
+                      )}
+                    >
+                      <AppText
+                        variant="caption"
+                        className={cn('font-medium', isSelected ? 'text-accent-on font-semibold' : 'text-ink-muted')}
+                      >
+                        {opt.label}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <AppText variant="caption" tone="faint">
+                {ROLE_DEFINITION_BY_ROLE[row.role].description}
+              </AppText>
+            </View>
 
             {/*
               A fix suggestion belongs to the row the engine blamed. When nobody is
@@ -184,7 +218,7 @@ export function VlsmRequirementList({
         className="self-start border border-line bg-surface px-3 py-2"
       >
         <View className="flex-row items-center gap-1.5">
-          <Plus size={16} strokeWidth={2.5} />
+          <Plus size={16} strokeWidth={2.5} className="text-accent" />
           <AppText variant="label" tone="accent">
             Add requirement
           </AppText>

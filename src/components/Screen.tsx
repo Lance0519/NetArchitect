@@ -36,7 +36,10 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppText } from '@/components/AppText';
+import { useRouter } from 'expo-router';
+import { Settings } from 'lucide-react-native';
+import { AppText } from './AppText';
+import { IconButton } from './Button';
 import { cn } from '@/utils/cn';
 
 export interface ScreenProps extends Omit<ViewProps, 'children'> {
@@ -44,6 +47,10 @@ export interface ScreenProps extends Omit<ViewProps, 'children'> {
   title?: string;
   /** One line under the title. Keep it to context, not explanation. */
   subtitle?: string | undefined;
+  /** Custom element in header top-right */
+  headerRight?: ReactNode | undefined;
+  /** Show settings shortcut button in header. Default true when title is provided. */
+  showSettings?: boolean;
   /**
    * Wrap content in a scroll view. Off by default.
    *
@@ -76,6 +83,8 @@ const WIDTH_CLASS = {
 export function Screen({
   title,
   subtitle,
+  headerRight,
+  showSettings = true,
   scroll = false,
   avoidKeyboard = true,
   width = 'read',
@@ -84,17 +93,31 @@ export function Screen({
   className,
   ...rest
 }: ScreenProps) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const header =
     title === undefined ? null : (
-      <View className="mb-gutter-lg gap-1">
-        <AppText variant="title">{title}</AppText>
-        {subtitle === undefined ? null : (
-          <AppText tone="muted" variant="body">
-            {subtitle}
-          </AppText>
-        )}
+      <View className="mb-gutter-lg flex-row items-start justify-between">
+        <View className="flex-1 gap-1 pr-3">
+          <AppText variant="title">{title}</AppText>
+          {subtitle === undefined ? null : (
+            <AppText tone="muted" variant="body">
+              {subtitle}
+            </AppText>
+          )}
+        </View>
+        {headerRight !== undefined ? (
+          headerRight
+        ) : showSettings && title !== 'Settings' ? (
+          <IconButton
+            label="Settings"
+            onPress={() => router.push('/settings')}
+            className="mt-1"
+          >
+            <Settings size={20} strokeWidth={2} className="text-ink-muted" />
+          </IconButton>
+        ) : null}
       </View>
     );
 

@@ -40,6 +40,7 @@ Thumbs.db
 # Build output from `expo export`, used by scripts/verify-bundle.cjs. Regenerated
 # on every verification run, and measured in the tens of megabytes.
 .export-probe/
+.export-probe-web/
 
 # Redirected tool output. On this machine FORCE_COLOR is set, so NO_COLOR is
 # ignored and output must be written to a file to be grepped. One rule rather

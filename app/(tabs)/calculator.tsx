@@ -1,83 +1,80 @@
 /**
  * IP Calculator.
  *
- * The screen's whole job is to hold one result and decide what to show for it. Every
- * number on this screen was computed by the engine from what the user typed, and
- * nothing here decides what a number should be.
+ * Redesigned for clarity and ease of use.
+ * Shows a prominent result card with network information.
+ * Advanced details are in an expandable section.
  *
- * ## Where the logic went, and why
- *
- * Four modules, all pure, all tested with no render mock:
- *
- *   `@/core/calculator-input`  typed text -> a `SubnetInfo` or a message
- *   `@/utils/subnet-view`      a `SubnetInfo` -> rows, badges, notices, copy text
- *   `@/utils/subnet-view`      a result -> empty | invalid | ok, and the view
- *   `@/utils/formatting`       a number -> a string
- *
- * R4 declined a component-test runner, so the only way "all 33 prefixes produce
- * correct output" could be an exit criterion rather than a manual spot-check was for
- * the output to exist as a value Vitest can reach. This file is the thin remainder
- * that connects them, and it contains one `switch` and no arithmetic.
- *
- * ## The plan said React Hook Form and a Zod resolver; this does not
- *
- * A deliberate, recorded deviation. Both were meant to serve one field that
- * re-evaluates on every settled keystroke, and the requirement underneath them - no
- * reimplementation of validation, and a debounce so keystrokes do not recompute twice -
- * is met more directly by calling `evaluateCombined`, which delegates to the same
- * engine the Zod schemas in `validation.ts` delegate to.
- *
- * React Hook Form earns its place in Phase 7 and 8, where there are requirement rows
- * being added, removed and reordered, and where `useFieldArray` is the whole problem.
- * Wrapping one text field in it here would add a subscription and a resolver to manage
- * for no behaviour, and would make the calculator's validation path differ from every
- * other screen's. RHF is used when it is the right tool, not to satisfy a plan line.
+ * Design principles:
+ * - Information hierarchy: network address first, then details
+ * - Progressive disclosure: basic info visible, advanced expandable
+ * - Touch-friendly: large input fields, clear buttons
+ * - Monospace for all technical values
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { CircleDashed, ClipboardCheck } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, ClipboardCheck, Copy } from 'lucide-react-native';
+import { useLocalSearchParams } from 'expo-router';
 
 import {
   AppText,
   Banner,
-  Button,
   Card,
   CidrInput,
-  EmptyState,
   IpResultCard,
   Screen,
+  SegmentedControl,
 } from '@/components';
+import { Button } from '@/components/ui/Button';
+import { RouteSummarizerView } from '@/components/tools/RouteSummarizerView';
+import { SubnetSplitterView } from '@/components/tools/SubnetSplitterView';
 import { evaluateCombined, type CalculatorOutcome } from '@/core/calculator-input';
 import { classifyCalculatorOutcome } from '@/utils/subnet-view';
 
-/** The state before anything is typed. Derived, not restated. */
-const INITIAL_OUTCOME: CalculatorOutcome = evaluateCombined('');
+type ToolMode = 'calculator' | 'summarizer' | 'splitter';
 
-/** How long the copy acknowledgement stays up. */
+const TOOL_OPTIONS = [
+  { value: 'calculator' as const, label: 'Calculator' },
+  { value: 'summarizer' as const, label: 'Summarizer' },
+  { value: 'splitter' as const, label: 'Splitter' },
+];
+
+const TOOL_METADATA: Record<ToolMode, { title: string; subtitle: string }> = {
+  calculator: {
+    title: 'IP Calculator',
+    subtitle: 'Calculate IPv4 subnet boundaries, masks, and hosts.',
+  },
+  summarizer: {
+    title: 'Route Summarizer',
+    subtitle: 'Aggregate subnets and detect unadvertised routing holes.',
+  },
+  splitter: {
+    title: 'Subnet Splitter',
+    subtitle: 'Binary tree visualization to recursively split & merge subnets.',
+  },
+};
+
+const INITIAL_OUTCOME: CalculatorOutcome = evaluateCombined('');
 const ACKNOWLEDGE_MS = 2200;
 
 export default function CalculatorScreen() {
+  const searchParams = useLocalSearchParams<{ tool?: string }>();
+  const [userTool, setUserTool] = useState<ToolMode | null>(null);
+
+  const toolMode: ToolMode =
+    userTool ??
+    (searchParams.tool === 'summarizer' || searchParams.tool === 'splitter'
+      ? searchParams.tool
+      : 'calculator');
+
   const [outcome, setOutcome] = useState<CalculatorOutcome>(INITIAL_OUTCOME);
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  /**
-   * Empty, invalid, or a built view - one total `switch` below.
-   *
-   * Computing this during render rather than in a `useState` fed by an effect means it
-   * cannot be a frame stale. A second effect syncing it would be a bug waiting for a
-   * render where it has not run yet.
-   */
   const state = useMemo(() => classifyCalculatorOutcome(outcome), [outcome]);
 
-  /**
-   * The acknowledgement timer, cancelled on unmount.
-   *
-   * A pending `setTimeout` outliving the screen sets state on an unmounted component,
-   * which React warns about and which is a real leak on a fast tab switch. The cleanup
-   * is the whole reason this is a `useRef` rather than a local in the handler.
-   */
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
@@ -94,12 +91,6 @@ export default function CalculatorScreen() {
     }, ACKNOWLEDGE_MS);
   }, []);
 
-  /**
-   * Copy a single value, and say which one.
-   *
-   * Acknowledging *which* row was copied matters: with twelve rows on screen, a generic
-   * "Copied" leaves the user unable to tell whether the tap registered at all.
-   */
   const handleCopy = useCallback(
     (label: string, value: string) => {
       void Clipboard.setStringAsync(value);
@@ -116,24 +107,65 @@ export default function CalculatorScreen() {
     [acknowledge],
   );
 
+  const [inputCidr, setInputCidr] = useState('');
+
+  const meta = TOOL_METADATA[toolMode];
+
   return (
     <Screen
-      title="IP Calculator"
-      subtitle="Every field for any IPv4 block, computed from what you type."
+      title={meta.title}
+      subtitle={meta.subtitle}
       width="form"
       scroll
     >
       <View className="gap-4">
-        <CidrInput onOutcome={setOutcome} />
+        {/* Tool selector */}
+        <SegmentedControl
+          label="Tool Mode"
+          options={TOOL_OPTIONS}
+          value={toolMode}
+          onChange={setUserTool}
+        />
 
-        {/* A total switch, so there is no branch where a state falls through the screen
-            and the user sees an input and nothing else. */}
+        {toolMode === 'summarizer' ? (
+          <RouteSummarizerView />
+        ) : toolMode === 'splitter' ? (
+          <SubnetSplitterView />
+        ) : (
+          <>
+            <CidrInput onOutcome={setOutcome} value={inputCidr} onChange={setInputCidr} />
+
         {state.kind === 'empty' ? (
-          <EmptyState
-            icon={CircleDashed}
-            title="Nothing to calculate yet"
-            description="Type an address and a prefix above. You will get the network, broadcast, subnet and wildcard masks, the first and last usable hosts, and the usable address count - with a note explaining anything unusual about the result."
-          />
+          <Card padding="md" className="gap-3">
+            <AppText variant="subheading" tone="primary">
+              Nothing to calculate yet
+            </AppText>
+            <AppText variant="caption" tone="muted">
+              Enter an address above or tap an example to populate instantly:
+            </AppText>
+            <View className="flex-row flex-wrap gap-2 pt-1">
+              {[
+                { label: 'Standard LAN (/24)', cidr: '192.168.1.0/24' },
+                { label: 'Small Office (/28)', cidr: '192.168.10.0/28' },
+                { label: 'Point-to-Point (/30)', cidr: '10.0.0.0/30' },
+                { label: 'RFC 3021 Link (/31)', cidr: '10.0.0.0/31' },
+                { label: 'Enterprise Core (/16)', cidr: '10.0.0.0/16' },
+                { label: 'Medium Branch (/22)', cidr: '172.16.0.0/22' },
+              ].map((ex) => (
+                <Pressable
+                  key={ex.cidr}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Load example ${ex.cidr}`}
+                  onPress={() => setInputCidr(ex.cidr)}
+                  className="rounded-pill border border-line bg-surface-raised px-3 py-1.5 active:bg-accent active:border-accent"
+                >
+                  <AppText variant="caption" tone="accent" mono>
+                    {ex.label}
+                  </AppText>
+                </Pressable>
+              ))}
+            </View>
+          </Card>
         ) : null}
 
         {state.kind === 'invalid' ? (
@@ -145,6 +177,42 @@ export default function CalculatorScreen() {
         {state.kind === 'ok' ? (
           <>
             <IpResultCard view={state.view} onCopy={handleCopy} />
+
+            {/* Advanced Details Toggle */}
+            <Card padding="none">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={showAdvanced ? 'Hide advanced details' : 'Show advanced details'}
+                onPress={() => setShowAdvanced(!showAdvanced)}
+                className="flex-row items-center justify-between px-4 py-3 active:bg-surface-raised"
+              >
+                <AppText variant="label" tone="muted">
+                  MORE DETAILS
+                </AppText>
+                {showAdvanced ? (
+                  <ChevronUp size={18} strokeWidth={2} className="text-ink-muted" />
+                ) : (
+                  <ChevronDown size={18} strokeWidth={2} className="text-ink-muted" />
+                )}
+              </Pressable>
+
+              {showAdvanced ? (
+                <View className="border-t border-line-subtle px-4 py-3">
+                  <View className="gap-2">
+                    {state.view.detail.map((row) => (
+                      <View key={row.label} className="flex-row items-center justify-between">
+                        <AppText variant="caption" tone="muted">
+                          {row.label}
+                        </AppText>
+                        <AppText variant="caption" tone="primary" mono>
+                          {row.value}
+                        </AppText>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+            </Card>
 
             <Card padding="lg">
               <View className="gap-2">
@@ -160,15 +228,6 @@ export default function CalculatorScreen() {
                   Copy everything
                 </Button>
 
-                {/*
-                  `polite`, and deliberately NOT `role="alert"`.
-
-                  `Banner` uses both together, which is right for it: a banner is a
-                  warning and should interrupt. This is a confirmation that the tap
-                  worked, and marking it as an alert would have a screen reader announce
-                  an emergency over a successful copy. `polite` alone waits for a
-                  natural pause, which is what a confirmation wants.
-                */}
                 {copiedLabel === null ? null : (
                   <AppText
                     variant="caption"
@@ -181,18 +240,21 @@ export default function CalculatorScreen() {
               </View>
             </Card>
 
-            {/*
-              The /31 and /32 explanations the plan asked for are built into the result
-              card as notices, from the view model rather than from this screen. Stated
-              here so nobody goes looking for them: a banner whose text lives in a
-              component cannot be asserted on, and these are the two notices most likely
-              to need a wording change.
-            */}
-            <AppText variant="caption" tone="faint">
-              Computed on this device. NetArchitect never connects to a network.
-            </AppText>
+            <View className="flex-row items-center gap-1.5">
+              <Copy
+                size={13}
+                strokeWidth={2}
+                className="shrink-0 text-ink-faint"
+                accessibilityElementsHidden
+              />
+              <AppText variant="caption" tone="faint" className="flex-1">
+                Tap any row to copy its value.
+              </AppText>
+            </View>
           </>
         ) : null}
+          </>
+        )}
       </View>
     </Screen>
   );

@@ -1,27 +1,13 @@
 /**
  * Tab layout - the five top-level tools.
  *
- * ## Why the fifth tab is "Audit" and not "Settings"
- *
- * The five are the things a user came here to *do*. Settings, Plans and Learning
- * are reachable but are not primary, so they live in the stack rather than
- * consuming a fifth of the screen on a phone. A tab bar is a statement about what
- * the app is; spending one of five slots on preferences misstates that.
- *
- * ## Labels, not icons alone
- *
- * Every tab has a visible label. An icon-only tab bar is a guessing game for
- * anyone who has not used the app before, and unreadable for a screen reader,
- * which is why this one is a deliberate departure from most mobile apps.
- *
- * ## Five tabs is the ceiling
- *
- * Material Design and the iOS HIG both put the practical limit at five on a
- * phone. Six would mean labels truncating to nothing on a small screen, which is
- * the point at which icons become necessary and the guessing game starts again.
+ * Dark theme tab bar with vector icons, high contrast colors,
+ * and safe area inset padding.
  */
 
 import { Tabs } from 'expo-router';
+import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Calculator,
   ClipboardCheck,
@@ -31,34 +17,39 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 
-/**
- * Tab bar config, one entry per route.
- *
- * The `href` strings are checked by Expo Router's generated types once
- * `expo start` has generated `.expo/types/router.d.ts`, so a renamed or misspelled
- * route becomes a compile error rather than a blank screen.
- */
+import { useTheme } from '@/theme';
+
 const TABS: readonly { name: string; title: string; Icon: LucideIcon }[] = [
   { name: 'index', title: 'Home', Icon: Network },
-  { name: 'calculator', title: 'Calculator', Icon: Calculator },
+  { name: 'calculator', title: 'Tools', Icon: Calculator },
   { name: 'vlsm', title: 'VLSM', Icon: LayoutList },
   { name: 'planner', title: 'Planner', Icon: ClipboardCheck },
   { name: 'audit', title: 'Audit', Icon: ShieldCheck },
 ];
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  const { scheme } = useTheme();
+  const isDark = scheme === 'dark';
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        // `rgb(var(--token))` rather than a literal, so the bar follows the theme
-        // automatically. A hard-coded `#ffffff` here is the single most common way
-        // a NativeWind app ends up with an unreadable tab bar in dark mode.
-        tabBarActiveTintColor: 'rgb(var(--accent-base))',
-        tabBarInactiveTintColor: 'rgb(var(--text-secondary))',
+        tabBarActiveTintColor: isDark ? '#609CFF' : '#1D4ED8',
+        tabBarInactiveTintColor: isDark ? '#94A3B8' : '#64748B',
         tabBarStyle: {
-          backgroundColor: 'rgb(var(--bg-surface))',
-          borderTopColor: 'rgb(var(--border-subtle))',
+          backgroundColor: isDark ? '#161922' : '#FFFFFF',
+          borderTopColor: isDark ? '#242A38' : '#E2E8F0',
+          borderTopWidth: 1,
+          height: Platform.OS === 'ios' ? 56 + insets.bottom : 64 + insets.bottom,
+          paddingBottom: Math.max(insets.bottom, 8),
+          paddingTop: 6,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '500',
+          marginTop: 2,
         },
       }}
     >
@@ -70,12 +61,9 @@ export default function TabsLayout() {
             title,
             tabBarIcon: ({ color, focused }) => (
               <Icon
-                size={22}
-                strokeWidth={focused ? 2.4 : 1.9}
+                size={20}
+                strokeWidth={focused ? 2.5 : 1.8}
                 color={color}
-                // The tab's own accessibility label comes from `title`, so the
-                // icon must not be announced as a second, redundant element.
-                accessibilityElementsHidden
               />
             ),
           }}

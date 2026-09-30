@@ -42,7 +42,7 @@
 
 import { View } from 'react-native';
 
-import { AppText } from '@/components/AppText';
+import { AppText } from './AppText';
 import { cn } from '@/utils/cn';
 
 import type { VlsmBarSegment } from '@/utils/vlsm-view';

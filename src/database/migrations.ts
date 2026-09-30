@@ -19,8 +19,8 @@ interface MigrationDatabase {
 /** Minimal statement interface for migrations - matches both SQLiteStatement and node:sqlite StatementSync. */
 interface MigrationStatement {
   getSync<T>(): T | null;
-  runSync(params?: Array<string | number | null>): void;
-  executeSync<T>(params?: Array<string | number | null>): { getFirstSync(): T | null; getAllSync(): T[] };
+  runSync(params?: (string | number | null)[]): void;
+  executeSync<T>(params?: (string | number | null)[]): { getFirstSync(): T | null; getAllSync(): T[] };
 }
 
 /** A single migration step. `up` must be a single transaction's worth of DDL. */

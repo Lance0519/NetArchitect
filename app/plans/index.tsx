@@ -1,14 +1,26 @@
 /**
- * Saved Plans list.
+ * Saved Plans - Redesigned.
  *
- * Shows all saved plans, newest first. Swipe to delete with undo.
- * Search by name. Empty state with CTA to create first plan.
+ * Project files view for managing saved network plans.
+ * Shows plan cards with name, parent network, subnet count, and last modified.
+ *
+ * Design principles:
+ * - Project files metaphor: cards, not table rows
+ * - Clear status indicators
+ * - Easy management: open, rename, duplicate, delete
+ * - Confirmation for destructive actions
  */
+
 import { useCallback, useEffect, useState } from 'react';
 import { View, TextInput } from 'react-native';
 import { Plus, Search } from 'lucide-react-native';
 
-import { AppText, Card, Divider, EmptyState, ListRow, Screen, Snackbar, useSnackbar } from '@/components';
+import { useRouter } from 'expo-router';
+
+import { AppText, Card, EmptyState, Screen, Snackbar, useSnackbar } from '@/components';
+import { Button } from '@/components/ui/Button';
+import { StatusIndicator } from '@/components/ui/StatusIndicator';
+import { useTheme } from '@/theme';
 import { useNetworkStore } from '@/store/network-store';
 
 import type { NetworkPlan } from '@/types/network';
@@ -16,13 +28,14 @@ import type { NetworkPlan } from '@/types/network';
 const SEARCH_DEBOUNCE_MS = 150;
 
 export default function PlansListScreen() {
+  const router = useRouter();
+  const { scheme } = useTheme();
   const { listPlans } = useNetworkStore();
   const { snackbars } = useSnackbar();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
 
-  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
@@ -36,7 +49,7 @@ export default function PlansListScreen() {
   }, [listPlans, debouncedQuery]);
 
   return (
-    <Screen title="Saved Plans" subtitle={`${plans().length} plan${plans().length === 1 ? '' : 's'} stored on this device.`} scroll>
+    <Screen title="My Network Plans" subtitle={`${plans().length} plan${plans().length === 1 ? '' : 's'} stored on this device.`} scroll>
       <View className="gap-4">
         {/* Search */}
         <Card padding="md" className="flex-row items-center gap-3">
@@ -45,8 +58,8 @@ export default function PlansListScreen() {
             placeholder="Search by name..."
             value={searchQuery}
             onChangeText={setSearchQuery}
-            className="flex-1"
-            placeholderTextColor="rgb(var(--text-muted))"
+            className="flex-1 text-ink"
+            placeholderTextColor={scheme === 'dark' ? '#94A3B8' : '#64748B'}
             autoCapitalize="none"
             autoCorrect={false}
             spellCheck={false}
@@ -54,6 +67,7 @@ export default function PlansListScreen() {
           />
         </Card>
 
+        {/* Plans List */}
         {plans().length === 0 ? (
           <EmptyState
             icon={Plus}
@@ -61,19 +75,26 @@ export default function PlansListScreen() {
             description={debouncedQuery
               ? 'Try a different search term, or create a new plan.'
               : 'Create your first plan in the Network Planner, then save it here.'}
+            action={
+              <Button
+                variant="primary"
+                size="sm"
+                onPress={() => router.push('/planner')}
+              >
+                Create Network Plan
+              </Button>
+            }
           />
         ) : (
-          <Card padding="none" className="overflow-hidden">
-            {plans().map((plan, index) => (
-              <View key={plan.id}>
-                {index > 0 ? <Divider inset="pl-4" /> : null}
-                <PlanListRow
-                  plan={plan}
-                  onPress={() => { /* Navigate to detail */ }}
-                />
-              </View>
+          <View className="gap-2">
+            {plans().map((plan) => (
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                onPress={() => router.push(`/plans/${plan.id}`)}
+              />
             ))}
-          </Card>
+          </View>
         )}
 
         <View className="py-4">
@@ -99,8 +120,7 @@ export default function PlansListScreen() {
   );
 }
 
-/** Individual plan row with swipe-to-delete. */
-function PlanListRow({
+function PlanCard({
   plan,
   onPress,
 }: {
@@ -121,10 +141,26 @@ function PlanListRow({
   };
 
   return (
-    <ListRow
-      title={plan.name}
-      description={`${plan.subnets.length} subnet${plan.subnets.length === 1 ? '' : 's'} · ${plan.parentCidr} · ${formatRelative(plan.updatedAt)}`}
-      onPress={onPress}
-    />
+    <Card padding="md">
+      <Button
+        variant="ghost"
+        block
+        onPress={onPress}
+        className="flex-row items-center gap-3 p-0"
+        icon={null}
+      >
+        <View className="flex-1 gap-1">
+          <AppText variant="subheading" tone="primary" numberOfLines={1}>
+            {plan.name}
+          </AppText>
+          <AppText variant="caption" tone="muted">
+            {plan.parentCidr} · {plan.subnets.length} subnet{plan.subnets.length === 1 ? '' : 's'}
+          </AppText>
+          <View className="flex-row items-center gap-2">
+            <StatusIndicator label={formatRelative(plan.updatedAt)} tone="neutral" />
+          </View>
+        </View>
+      </Button>
+    </Card>
   );
 }

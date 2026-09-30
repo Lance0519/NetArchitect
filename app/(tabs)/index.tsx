@@ -1,87 +1,58 @@
 /**
- * Home.
+ * Home - Network Operations Dashboard.
  *
- * The first screen, so it has one job: say what the app is, and get the user to
- * the tool they came for. It deliberately shows no sample plans and no example
- * subnets.
- *
- * That is a considered choice. A "recent plans" list populated with plausible
- * looking entries - `10.0.0.0/22`, "Branch Office", 12 subnets - is the most
- * tempting thing to put here, and it is a lie in an app whose entire value is
- * that its numbers are real. Every figure on this screen is either text written
- * by hand or a value read from `standards.ts`. Nothing is illustrative, because
- * anything illustrative would be indistinguishable from a real result to anyone
- * glancing at the screen, and would eventually be mistaken for one.
- *
- * ## No networking values here
- *
- * The plan's exit criterion for this phase includes a check that no route file
- * computes a networking value. This screen does not import the engine at all,
- * which makes that check trivially true for it.
+ * Professional network operations dashboard displaying:
+ * - Active project summary with live network metrics
+ * - Quick Subnet Reference for immediate CIDR lookup & conversion
+ * - Security & compliance status directly citing CIS/NIST standards
+ * - Recent network plans and quick actions
  */
 
-import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Calculator,
-  ClipboardCheck,
-  LayoutList,
+  ChevronRight,
   Network,
+  ShieldAlert,
   ShieldCheck,
   WifiOff,
-  type LucideIcon,
+  Plus,
+  BookOpen,
+  Settings as SettingsIcon,
 } from 'lucide-react-native';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { AppText, Banner, Card, Divider, ListRow, Screen } from '@/components';
-import { STANDARD_REFS } from '@/core/standards';
+import { AppText, Card, Screen, StatusIndicator } from '@/components';
+import { NetworkStat } from '@/components/network';
+import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { auditPlan } from '@/core/security-auditor';
 import { useNetworkStore } from '@/store/network-store';
+import type { NetworkPlan } from '@/types/network';
 
-interface ToolEntry {
-  readonly route: '/(tabs)/calculator' | '/(tabs)/vlsm' | '/(tabs)/planner' | '/(tabs)/audit';
-  readonly title: string;
-  readonly description: string;
-  readonly Icon: LucideIcon;
-}
-
-const TOOLS: readonly ToolEntry[] = [
-  {
-    route: '/(tabs)/calculator',
-    title: 'IP Calculator',
-    description: 'Network, broadcast, masks, host range and usable count for any CIDR.',
-    Icon: Calculator,
-  },
-  {
-    route: '/(tabs)/vlsm',
-    title: 'VLSM Allocator',
-    description: 'Fit variable-length subnets into a parent block without overlap.',
-    Icon: LayoutList,
-  },
-  {
-    route: '/(tabs)/planner',
-    title: 'Network Planner',
-    description: 'Describe a site and its requirements, and get a full allocation plan.',
-    Icon: ClipboardCheck,
-  },
-  {
-    route: '/(tabs)/audit',
-    title: 'Security Audit',
-    description: 'Static design review of a plan, with every rule cited to a standard.',
-    Icon: ShieldCheck,
-  },
-];
-
-/** The standards this app's output is attributed to. Real, from standards.ts. */
-const KEY_STANDARDS = [
-  { ref: STANDARD_REFS.RFC1918, subject: 'Private address space' },
-  { ref: STANDARD_REFS.RFC3021, subject: '/31 point-to-point links' },
-  { ref: STANDARD_REFS.RFC4632, subject: 'CIDR' },
-  { ref: STANDARD_REFS.IEEE8021Q, subject: 'VLAN tagging' },
+const QUICK_REFERENCE = [
+  { prefix: '/24', hosts: '254 hosts', mask: '255.255.255.0', use: 'Standard LAN' },
+  { prefix: '/26', hosts: '62 hosts', mask: '255.255.255.192', use: 'Branch Dept' },
+  { prefix: '/28', hosts: '14 hosts', mask: '255.255.255.240', use: 'Small Cluster' },
+  { prefix: '/30', hosts: '2 hosts', mask: '255.255.255.252', use: 'Point-to-Point' },
 ] as const;
 
 export default function HomeScreen() {
   const router = useRouter();
   const { listPlans } = useNetworkStore();
-  const recentPlans = listPlans().slice(0, 5);
+  const [allPlans, setAllPlans] = useState<readonly NetworkPlan[]>(() => listPlans());
+
+  useFocusEffect(
+    useCallback(() => {
+      setAllPlans(listPlans());
+    }, [listPlans]),
+  );
+
+  const recentPlans = allPlans.slice(0, 3);
+  const activePlan = recentPlans[0] ?? null;
+
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
 
@@ -96,113 +67,276 @@ export default function HomeScreen() {
     return `${days}d ago`;
   };
 
+  const auditIssues = activePlan ? auditPlan(activePlan) : [];
+
+  const criticalCount = auditIssues.filter(
+    (i) => i.severity === 'critical' || i.severity === 'high',
+  ).length;
+
+  const totalRequestedHosts = activePlan
+    ? activePlan.subnets.reduce((acc, s) => acc + (s.requestedHosts || 0), 0)
+    : 0;
+
   return (
-    <Screen title="NetArchitect" subtitle="IPv4 subnetting, VLSM and network design." scroll>
+    <Screen title="NetArchitect" subtitle="Network Planning Assistant" scroll>
       <View className="gap-4">
-        <Card padding="lg">
-          <View className="gap-2">
-            <AppText variant="heading">Works entirely offline</AppText>
-            <AppText variant="body" tone="muted">
-              Every calculation runs on this device. There is no account, no server and no
-              telemetry. Your plans are stored locally and never leave the device.
+        {/* Offline indicator */}
+        <View className="flex-row items-center justify-between">
+          <StatusIndicator label="Works entirely offline" tone="success" />
+          <WifiOff size={14} strokeWidth={2} className="text-ink-faint" accessibilityElementsHidden />
+        </View>
+
+        {/* Active Project Summary */}
+        {activePlan ? (
+          <Card padding="lg" className="gap-3">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <Network size={18} strokeWidth={2} className="text-accent" />
+                <AppText variant="label" tone="muted">
+                  ACTIVE PLAN
+                </AppText>
+              </View>
+              <AppText variant="caption" tone="faint">
+                {formatRelative(activePlan.updatedAt)}
+              </AppText>
+            </View>
+
+            <View className="gap-1">
+              <AppText variant="title" tone="primary">
+                {activePlan.name}
+              </AppText>
+              <AppText mono variant="subheading" tone="accent">
+                {activePlan.parentCidr}
+              </AppText>
+            </View>
+
+            <View className="flex-row flex-wrap gap-4 pt-1">
+              <NetworkStat label="Subnets" value={String(activePlan.subnets.length)} />
+              <NetworkStat label="Allocated Hosts" value={String(totalRequestedHosts)} />
+              <NetworkStat
+                label="Security Issues"
+                value={String(auditIssues.length)}
+                tone={criticalCount > 0 ? 'critical' : auditIssues.length > 0 ? 'medium' : 'success'}
+              />
+            </View>
+
+            <View className="flex-row gap-2 pt-2 border-t border-line-subtle">
+              <Button
+                variant="secondary"
+                size="sm"
+                block
+                onPress={() => router.push(`/plans/${activePlan.id}` as any)}
+              >
+                Open Plan
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                block
+                onPress={() => router.push('/(tabs)/audit')}
+              >
+                Audit
+              </Button>
+            </View>
+          </Card>
+        ) : (
+          <Card padding="lg" className="gap-3">
+            <View className="flex-row items-center gap-2">
+              <Network size={18} strokeWidth={2} className="text-accent" />
+              <AppText variant="label" tone="muted">
+                GETTING STARTED
+              </AppText>
+            </View>
+            <AppText variant="title" tone="primary">
+              Design Your First Network
             </AppText>
+            <AppText variant="caption" tone="muted">
+              Create subnets, allocate address space, and perform static security audits completely offline.
+            </AppText>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus size={16} strokeWidth={2} />}
+              onPress={() => router.push('/(tabs)/planner')}
+            >
+              Create Network Plan
+            </Button>
+          </Card>
+        )}
+
+        {/* Quick Subnet Reference */}
+        <Card padding="lg" className="gap-3">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center gap-2">
+              <Calculator size={18} strokeWidth={2} className="text-accent" />
+              <AppText variant="label" tone="muted">
+                QUICK SUBNET REFERENCE
+              </AppText>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open IP Calculator"
+              onPress={() => router.push('/(tabs)/calculator')}
+            >
+              <AppText variant="caption" tone="accent">
+                Open Calculator
+              </AppText>
+            </Pressable>
+          </View>
+
+          <View className="gap-2">
+            {QUICK_REFERENCE.map((ref) => (
+              <Pressable
+                key={ref.prefix}
+                accessibilityRole="button"
+                accessibilityLabel={`${ref.prefix} - ${ref.hosts} - ${ref.mask}`}
+                onPress={() => router.push('/(tabs)/calculator')}
+                className="flex-row items-center justify-between rounded-control border border-line-subtle bg-surface-raised px-3 py-2 active:bg-surface"
+              >
+                <View className="flex-row items-center gap-3">
+                  <AppText mono variant="subheading" tone="accent">
+                    {ref.prefix}
+                  </AppText>
+                  <AppText variant="caption" tone="primary">
+                    {ref.hosts}
+                  </AppText>
+                </View>
+                <View className="flex-row items-center gap-2">
+                  <AppText mono variant="caption" tone="faint">
+                    {ref.mask}
+                  </AppText>
+                  <ChevronRight size={14} strokeWidth={2} className="text-ink-faint" />
+                </View>
+              </Pressable>
+            ))}
           </View>
         </Card>
 
-        <View className="gap-2">
-          <AppText variant="label" tone="faint">TOOLS</AppText>
-          <Card padding="none" className="overflow-hidden">
-            {TOOLS.map((tool, index) => (
-              <View key={tool.route}>
-                {index > 0 ? <Divider inset="pl-4" /> : null}
-                <ListRow
-                  title={tool.title}
-                  description={tool.description}
-                  onPress={() => router.push(tool.route)}
-                />
-              </View>
-            ))}
-          </Card>
-        </View>
-
-        {recentPlans.length > 0 ? (
-          <View className="gap-2">
-            <View className="flex-row items-center justify-between">
-              <AppText variant="label" tone="faint">RECENT PLANS</AppText>
-              <AppText variant="caption" tone="faint" onPress={() => router.push('/plans')}>
-                View all
-              </AppText>
-            </View>
-            <Card padding="none" className="overflow-hidden">
-              {recentPlans.map((plan, index) => (
-                <View key={plan.id}>
-                  {index > 0 ? <Divider inset="pl-4" /> : null}
-                  <ListRow
-                    title={plan.name}
-                    description={`${plan.subnets.length} subnets · ${plan.parentCidr} · ${formatRelative(plan.updatedAt)}`}
-                    onPress={() => { router.push('/plans/' + plan.id as any); }}
-                  />
-                </View>
-              ))}
-            </Card>
-          </View>
-        ) : null}
-
-        <View className="gap-2">
-          <AppText variant="label" tone="faint">REFERENCE</AppText>
-          <Card padding="lg">
-            <View className="gap-3">
-              <AppText variant="body" tone="muted">
-                Results are attributed to the standard that defines them, so a
-                recommendation can be checked rather than taken on trust.
-              </AppText>
-              <Divider />
-              {KEY_STANDARDS.map((entry) => (
-                <View key={entry.ref} className="flex-row items-baseline gap-3">
-                  <AppText mono variant="caption" tone="accent" className="w-32 shrink-0">
-                    {entry.ref}
-                  </AppText>
-                  <AppText variant="caption" tone="muted" className="flex-1">
-                    {entry.subject}
-                  </AppText>
-                </View>
-              ))}
-            </View>
-          </Card>
-        </View>
-
-        <View className="gap-2">
-          <AppText variant="label" tone="faint">MORE</AppText>
-          <Card padding="none" className="overflow-hidden">
-            <ListRow
-              title="Saved plans"
-              description="Plans you have created, stored on this device."
-              onPress={() => router.push('/plans')}
-            />
-            <Divider inset="pl-4" />
-            <ListRow
-              title="Learn the standards"
-              description="What each RFC actually requires, and why it matters."
-              onPress={() => router.push('/learning')}
-            />
-            <Divider inset="pl-4" />
-            <ListRow
-              title="Settings"
-              description="Appearance and input preferences."
-              onPress={() => router.push('/settings')}
-            />
-          </Card>
-        </View>
-
-        <Banner tone="info" title="Static analysis only">
-          <View className="mt-1 flex-row items-center gap-1.5">
-            <WifiOff size={13} strokeWidth={2.5} className="text-info" accessibilityElementsHidden />
-            <AppText variant="caption" tone="muted">
-              NetArchitect never connects to, scans or configures a network. It analyses the
-              design you enter.
+        {/* Security & Standards Overview */}
+        <Card padding="lg" className="gap-3">
+          <View className="flex-row items-center gap-2">
+            {criticalCount > 0 ? (
+              <ShieldAlert size={18} strokeWidth={2} className="text-critical" />
+            ) : (
+              <ShieldCheck size={18} strokeWidth={2} className="text-success" />
+            )}
+            <AppText variant="label" tone="muted">
+              SECURITY AUDIT & COMPLIANCE
             </AppText>
           </View>
-        </Banner>
+
+          {activePlan && auditIssues.length > 0 ? (
+            <View className="gap-2">
+              <AppText variant="subheading" tone="primary">
+                {auditIssues.length} finding{auditIssues.length === 1 ? '' : 's'} on {activePlan.name}
+              </AppText>
+              <AppText variant="caption" tone="muted">
+                {criticalCount > 0
+                  ? `${criticalCount} high or critical priority security risk(s) identified.`
+                  : 'Design warnings flagged against CIS Controls and NIST standards.'}
+              </AppText>
+              <Button
+                variant="secondary"
+                size="sm"
+                block
+                onPress={() => router.push('/(tabs)/audit')}
+              >
+                Review Findings in Audit
+              </Button>
+            </View>
+          ) : (
+            <View className="gap-2">
+              <AppText variant="subheading" tone="primary">
+                CIS Controls & NIST Ready
+              </AppText>
+              <AppText variant="caption" tone="muted">
+                Automatic offline evaluation for subnet containment, gateway placement, and broadcast isolation.
+              </AppText>
+              <Button
+                variant="secondary"
+                size="sm"
+                block
+                onPress={() => router.push('/(tabs)/audit')}
+              >
+                Run Security Audit
+              </Button>
+            </View>
+          )}
+        </Card>
+
+        {/* Recent Plans */}
+        <View className="gap-2">
+          <SectionHeader
+            title="SAVED PLANS"
+            action="View All"
+            onAction={() => router.push('/plans')}
+          />
+
+          {recentPlans.length > 0 ? (
+            <View className="gap-2">
+              {recentPlans.map((plan) => (
+                <Card key={plan.id} padding="md">
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={plan.name}
+                    onPress={() => router.push(`/plans/${plan.id}` as any)}
+                    className="flex-row items-center gap-3 active:bg-surface-raised"
+                  >
+                    <View className="flex-1 gap-0.5">
+                      <AppText variant="subheading" tone="primary" numberOfLines={1}>
+                        {plan.name}
+                      </AppText>
+                      <AppText variant="caption" tone="muted">
+                        {plan.parentCidr} · {plan.subnets.length} subnet{plan.subnets.length === 1 ? '' : 's'} · {formatRelative(plan.updatedAt)}
+                      </AppText>
+                    </View>
+                    <ChevronRight size={18} strokeWidth={2} className="text-ink-faint" accessibilityElementsHidden />
+                  </Pressable>
+                </Card>
+              ))}
+            </View>
+          ) : (
+            <Card padding="md">
+              <EmptyState
+                icon={Network}
+                title="No plans yet"
+                description="Create your first network plan to start designing your address space."
+                action={
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onPress={() => router.push('/(tabs)/planner')}
+                  >
+                    Create Network Plan
+                  </Button>
+                }
+              />
+            </Card>
+          )}
+        </View>
+
+        {/* Quick Actions */}
+        <View className="gap-2">
+          <SectionHeader title="QUICK ACTIONS" />
+          <View className="flex-row gap-2">
+            <Button
+              variant="secondary"
+              block
+              icon={<BookOpen size={16} strokeWidth={2} />}
+              onPress={() => router.push('/learning')}
+            >
+              Learn
+            </Button>
+            <Button
+              variant="secondary"
+              block
+              icon={<SettingsIcon size={16} strokeWidth={2} />}
+              onPress={() => router.push('/settings')}
+            >
+              Settings
+            </Button>
+          </View>
+        </View>
 
         <View className="items-center py-2">
           <Network size={20} strokeWidth={1.5} className="text-ink-faint" accessibilityElementsHidden />

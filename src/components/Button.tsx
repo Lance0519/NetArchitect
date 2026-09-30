@@ -20,7 +20,7 @@
  * target; the target cannot.
  */
 
-import { type ReactNode } from 'react';
+import { cloneElement, isValidElement, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -30,7 +30,8 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { AppText } from '@/components/AppText';
+import { AppText } from './AppText';
+import { useTheme } from '@/theme';
 import { cn } from '@/utils/cn';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -95,6 +96,29 @@ export function Button({
   style,
   ...rest
 }: ButtonProps) {
+  const { scheme } = useTheme();
+  const isDark = scheme === 'dark';
+
+  const iconColor =
+    variant === 'primary' || variant === 'danger'
+      ? isDark
+        ? '#080E1A'
+        : '#FFFFFF'
+      : variant === 'ghost'
+        ? isDark
+          ? '#609CFF'
+          : '#1D4ED8'
+        : isDark
+          ? '#F0F2F7'
+          : '#10131C';
+
+  const renderedIcon =
+    isValidElement(icon) && typeof icon.type !== 'string'
+      ? cloneElement(icon as React.ReactElement<{ color?: string }>, {
+          color: (icon as React.ReactElement<{ color?: string }>).props.color ?? iconColor,
+        })
+      : icon;
+
   // Loading implies disabled. A button that says "Saving…" and still accepts taps
   // will be tapped, and the second write is either a duplicate or an error the
   // user caused. It is up to the caller to stop the async work, not to render.
@@ -127,10 +151,10 @@ export function Button({
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === 'primary' || variant === 'danger' ? '#FFFFFF' : undefined}
+          color={iconColor}
         />
       ) : (
-        icon
+        renderedIcon
       )}
       <AppText
         variant={LABEL_VARIANT[size]}
@@ -182,6 +206,29 @@ export function IconButton({
   style,
   ...rest
 }: IconButtonProps) {
+  const { scheme } = useTheme();
+  const isDark = scheme === 'dark';
+
+  const defaultIconColor =
+    tone === 'danger'
+      ? isDark
+        ? '#FF8A8A'
+        : '#BE1222'
+      : tone === 'accent'
+        ? isDark
+          ? '#609CFF'
+          : '#1D4ED8'
+        : isDark
+          ? '#9EA6B6'
+          : '#586073';
+
+  const renderedChild =
+    isValidElement(children) && typeof children.type !== 'string'
+      ? cloneElement(children as React.ReactElement<{ color?: string }>, {
+          color: (children as React.ReactElement<{ color?: string }>).props.color ?? defaultIconColor,
+        })
+      : children;
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -205,7 +252,7 @@ export function IconButton({
           carries the accessible name. Without this, VoiceOver reads the SVG's
           internal structure as well as the label. */}
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        {children}
+        {renderedChild}
       </View>
     </Pressable>
   );

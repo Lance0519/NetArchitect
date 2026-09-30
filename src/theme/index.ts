@@ -23,3 +23,11 @@ export {
 } from './severity';
 
 export { FONTS, hasResolvedMonoFont } from './typography';
+
+export {
+  ICON_COLORS,
+  getIconColor,
+  interopIcon,
+  useIconColor,
+  type IconTone,
+} from './icons';

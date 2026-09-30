@@ -1,4 +1,4 @@
-﻿/*
+/*
  * ESLint flat config.
  *
  * `eslint-config-expo/flat` is the flat-config entry point. The bare
@@ -27,6 +27,7 @@ module.exports = [
       ".expo/types/**",
       /* Output of `expo export`. A build artifact, not source. */
       ".export-probe/**",
+      ".export-probe-web/**",
     ],
   },
 

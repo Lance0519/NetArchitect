@@ -31,12 +31,24 @@
  */
 
 import '../global.css';
+import '@/theme/icons';
 
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { LogBox } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import type { ErrorBoundaryProps } from 'expo-router';
+
+import { ErrorBoundary as AppErrorBoundary, ErrorFallback } from '@/components';
 import { useTheme } from '@/theme';
+
+// Suppress floating warning overlay over bottom navigation bar in dev
+LogBox.ignoreAllLogs();
+
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return <ErrorFallback error={error} resetErrorBoundary={retry} />;
+}
 
 /**
  * Applies the resolved colour scheme to NativeWind.
@@ -58,20 +70,22 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeSync />
-      <Stack
-        screenOptions={{
-          // Each screen renders its own heading via `Screen`, so the native header
-          // is off. Two headers on one screen is a layout bug, and having the
-          // native one appear conditionally per platform is worse.
-          headerShown: false,
-          contentStyle: { backgroundColor: 'rgb(var(--bg-canvas))' },
-        }}
-      >
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="learning" options={{ presentation: 'card' }} />
-        <Stack.Screen name="plans" options={{ presentation: 'card' }} />
-        <Stack.Screen name="settings" options={{ presentation: 'card' }} />
-      </Stack>
+      <AppErrorBoundary>
+        <Stack
+          screenOptions={{
+            // Each screen renders its own heading via `Screen`, so the native header
+            // is off. Two headers on one screen is a layout bug, and having the
+            // native one appear conditionally per platform is worse.
+            headerShown: false,
+            contentStyle: { backgroundColor: 'rgb(var(--bg-canvas))' },
+          }}
+        >
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="learning" options={{ presentation: 'card' }} />
+          <Stack.Screen name="plans" options={{ presentation: 'card' }} />
+          <Stack.Screen name="settings" options={{ presentation: 'card' }} />
+        </Stack>
+      </AppErrorBoundary>
     </SafeAreaProvider>
   );
 }

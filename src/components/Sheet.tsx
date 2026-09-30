@@ -31,8 +31,8 @@ import { Modal, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 
-import { AppText } from '@/components/AppText';
-import { IconButton } from '@/components/Button';
+import { AppText } from './AppText';
+import { IconButton } from './Button';
 import { cn } from '@/utils/cn';
 
 export interface SheetProps {

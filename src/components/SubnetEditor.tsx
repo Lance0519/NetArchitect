@@ -40,7 +40,12 @@
 import { View } from 'react-native';
 import { AlertTriangle, ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react-native';
 
-import { AppText, Card, IconButton, SegmentedControl, Select, TextField } from '@/components';
+import { AppText } from './AppText';
+import { IconButton } from './Button';
+import { Card } from './Card';
+import { SegmentedControl } from './SegmentedControl';
+import { Select } from './Select';
+import { TextField } from './TextField';
 import { NETWORK_ROLES, ROLE_DEFINITION_BY_ROLE } from '@/core/roles';
 import { cn } from '@/utils/cn';
 import { EM_DASH } from '@/utils/formatting';
@@ -139,14 +144,14 @@ export function SubnetEditor({
                   // nothing is worse than one that visibly is not.
                   disabled={!row.canMoveUp}
                 >
-                  <ArrowUp size={16} strokeWidth={2.5} />
+                  <ArrowUp size={16} strokeWidth={2.5} className="text-ink-muted" />
                 </IconButton>
                 <IconButton
                   label={`Move ${label} down`}
                   onPress={() => onMove(row.id, 1)}
                   disabled={!row.canMoveDown}
                 >
-                  <ArrowDown size={16} strokeWidth={2.5} />
+                  <ArrowDown size={16} strokeWidth={2.5} className="text-ink-muted" />
                 </IconButton>
                 <IconButton
                   label={`Remove ${label}`}
@@ -156,7 +161,7 @@ export function SubnetEditor({
                   // way back but a reset, and emptying itself looks like data loss.
                   disabled={!row.canRemove}
                 >
-                  <Trash2 size={16} strokeWidth={2.5} />
+                  <Trash2 size={16} strokeWidth={2.5} className="text-critical" />
                 </IconButton>
               </View>
             </View>
@@ -314,7 +319,7 @@ export function SubnetEditor({
         className="self-start border border-line bg-surface px-3 py-2"
       >
         <View className="flex-row items-center gap-1.5">
-          <Plus size={16} strokeWidth={2.5} />
+          <Plus size={16} strokeWidth={2.5} className="text-accent" />
           <AppText variant="label" tone="accent">
             Add subnet
           </AppText>

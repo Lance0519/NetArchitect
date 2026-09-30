@@ -32,11 +32,11 @@
 import { Pressable, View } from 'react-native';
 import { Copy, Info } from 'lucide-react-native';
 
-import { AppText } from '@/components/AppText';
-import { Badge, type BadgeTone } from '@/components/Badge';
-import { Banner, type BannerTone } from '@/components/Banner';
-import { Card } from '@/components/Card';
-import { Divider } from '@/components/Divider';
+import { AppText } from './AppText';
+import { Badge, type BadgeTone } from './Badge';
+import { Banner, type BannerTone } from './Banner';
+import { Card } from './Card';
+import { Divider } from './Divider';
 import { cn } from '@/utils/cn';
 
 import type { SubnetNotice, SubnetRow, SubnetView } from '@/utils/subnet-view';

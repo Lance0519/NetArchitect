@@ -32,7 +32,8 @@
 import { View } from 'react-native';
 import { AlertTriangle } from 'lucide-react-native';
 
-import { AppText, Card } from '@/components';
+import { AppText } from './AppText';
+import { Card } from './Card';
 import { cn } from '@/utils/cn';
 
 import type { PlanFinding } from '@/core/planner-input';

@@ -26,7 +26,7 @@
 import { type ReactNode } from 'react';
 import { View, type ViewProps } from 'react-native';
 
-import { AppText } from '@/components/AppText';
+import { AppText } from './AppText';
 import type { Severity } from '@/types/network';
 import { severityMeta } from '@/theme/severity';
 import { cn } from '@/utils/cn';
@@ -72,6 +72,19 @@ export interface BadgeProps extends Omit<ViewProps, 'className'> {
   className?: string | undefined;
 }
 
+function isTextContent(node: ReactNode): boolean {
+  if (typeof node === 'string' || typeof node === 'number') {
+    return true;
+  }
+  if (node === null || node === undefined || typeof node === 'boolean') {
+    return true;
+  }
+  if (Array.isArray(node)) {
+    return node.every(isTextContent);
+  }
+  return false;
+}
+
 export function Badge({ tone = 'neutral', className, children, ...rest }: BadgeProps) {
   const isPill = PILL_TONES.includes(tone);
   return (
@@ -86,7 +99,7 @@ export function Badge({ tone = 'neutral', className, children, ...rest }: BadgeP
       )}
       {...rest}
     >
-      {typeof children === 'string' ? (
+      {isTextContent(children) ? (
         <AppText variant="caption" className={cn('font-medium', BADGE_TEXT[tone])}>
           {children}
         </AppText>

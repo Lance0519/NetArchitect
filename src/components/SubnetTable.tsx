@@ -55,8 +55,8 @@
 
 import { ScrollView, View, useWindowDimensions } from 'react-native';
 
-import { AppText } from '@/components/AppText';
-import { CidrBadge } from '@/components/Badge';
+import { AppText } from './AppText';
+import { CidrBadge } from './Badge';
 import { cn } from '@/utils/cn';
 import {
   COLUMNS,

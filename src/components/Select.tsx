@@ -28,10 +28,9 @@
  * and `SegmentedControl` for 2-3 short ones.
  */
 
-import { ChevronRight } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
-import { AppText } from '@/components/AppText';
+import { AppText } from './AppText';
 import { cn } from '@/utils/cn';
 
 export interface SelectOption<T extends string> {
@@ -121,15 +120,6 @@ export function Select<T extends string>({
                   </AppText>
                 )}
               </View>
-
-              {selected ? (
-                <ChevronRight
-                  size={16}
-                  strokeWidth={2.5}
-                  className="text-accent"
-                  accessibilityElementsHidden
-                />
-              ) : null}
             </Pressable>
           );
         })}

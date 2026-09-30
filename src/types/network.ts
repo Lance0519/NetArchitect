@@ -266,10 +266,31 @@ export interface SecurityIssue {
 }
 
 /* ------------------------------------------------------------------ *
+ * Per-Subnet Host Allocation
+ * ------------------------------------------------------------------ */
+
+export interface HostAllocationPlan {
+  readonly networkAddress: string;
+  readonly gateway: string;
+  readonly staticRange: {
+    readonly start: string;
+    readonly end: string;
+    readonly count: number;
+  } | null;
+  readonly dhcpPool: {
+    readonly start: string;
+    readonly end: string;
+    readonly count: number;
+  } | null;
+  readonly broadcastAddress: string | null;
+  readonly totalAssignable: number;
+}
+
+/* ------------------------------------------------------------------ *
  * Configuration export
  * ------------------------------------------------------------------ */
 
-export type ExportTarget = 'cisco-ios' | 'linux-iptables' | 'json';
+export type ExportTarget = 'cisco-ios' | 'linux-iptables' | 'mikrotik' | 'terraform' | 'json';
 
 export interface ExportOptions {
   /**

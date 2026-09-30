@@ -23,7 +23,7 @@ import { type ReactNode } from 'react';
 import { View } from 'react-native';
 import { Inbox, type LucideIcon } from 'lucide-react-native';
 
-import { AppText } from '@/components/AppText';
+import { AppText } from './AppText';
 import { cn } from '@/utils/cn';
 
 export interface EmptyStateProps {

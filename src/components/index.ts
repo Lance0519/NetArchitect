@@ -18,6 +18,7 @@
  * fix is per-route bundles, not a return to deep imports.)
  */
 
+export { AddressSpaceBar, type AddressSpaceBarProps } from './AddressSpaceBar';
 export { AppText, type AppTextProps, type TextTone, type TextVariant } from './AppText';
 export { Badge, CidrBadge, SeverityTag, VlanBadge, type BadgeProps, type BadgeTone } from './Badge';
 export { Banner, type BannerProps, type BannerTone } from './Banner';
@@ -27,14 +28,19 @@ export { ChangePreview, type ChangePreviewProps } from './ChangePreview';
 export { CidrInput, type CidrInputProps } from './CidrInput';
 export { Divider, type DividerProps } from './Divider';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
+export { ErrorBoundary, ErrorFallback } from './ErrorBoundary';
+export { ExportSheet, type ExportSheetProps } from './ExportSheet';
 export { IpResultCard, type IpResultCardProps } from './IpResultCard';
 export { ListRow, type ListRowProps } from './ListRow';
 export { PlanFindingList, type PlanFindingListProps } from './PlanFindingList';
+export { ProgressBar, type ProgressBarProps } from './ProgressBar';
 export { Screen, type ScreenProps } from './Screen';
+export { SecurityIssueCard, type SecurityIssueCardProps } from './SecurityIssueCard';
 export { SegmentedControl, type SegmentedControlProps, type SegmentOption } from './SegmentedControl';
 export { Select, type SelectOption, type SelectProps } from './Select';
 export { Sheet, type SheetProps } from './Sheet';
 export { Snackbar, type SnackbarProps, useSnackbar } from './Snackbar';
+export { StatusIndicator, type StatusIndicatorProps } from './ui/StatusIndicator';
 export { SubnetBar, type SubnetBarProps } from './SubnetBar';
 export { SubnetEditor, type SubnetEditorProps } from './SubnetEditor';
 export { SubnetTable, type SubnetTableProps } from './SubnetTable';

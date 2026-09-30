@@ -1,4 +1,4 @@
-﻿{
+{
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     /* The engine must be provably correct, so the compiler is turned up as far

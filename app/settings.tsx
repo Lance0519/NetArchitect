@@ -1,22 +1,14 @@
 /**
- * Settings.
+ * Settings - Redesigned.
  *
- * One of the three routes that is *complete* in this phase rather than a
- * placeholder, because everything it needs already exists: `ui-store` holds the
- * preferences, `useTheme` resolves them, and `SegmentedControl` renders a choice.
- * The alternative - stubbing the only screen whose backing code was finished -
- * would have been a strange place to draw the line.
+ * Clean, organized settings interface.
+ * Theme, display preferences, and about information.
  *
- * ## The theme control resolves `system` before showing a value
- *
- * The segmented control shows Light / Dark / System. When the user has chosen
- * `system`, the app is currently rendering in whatever the OS says, and the
- * control says `System` rather than pre-selecting `Light`. Highlighting a
- * specific theme the user did not choose is a small lie, and it makes the control
- * look broken - tapping it appears to do nothing.
- *
- * `useTheme().scheme` is still rendered, as the *effective* theme, because
- * knowing what is actually in effect is useful when a screen looks wrong.
+ * Design principles:
+ * - Grouped settings by category
+ * - Clear descriptions
+ * - Live preview of changes
+ * - Consistent with app design language
  */
 
 import { useRouter } from 'expo-router';
@@ -51,9 +43,6 @@ export default function SettingsScreen() {
       title="Settings"
       scroll
       width="form"
-      // A native back button would sit above our own header, and this screen
-      // renders its own. This is the one route that is pushed onto the stack, so
-      // it is the one that needs a way back.
       footer={
         <IconButton label="Go back" onPress={() => router.back()}>
           <ChevronLeft size={20} strokeWidth={2} className="text-ink-muted" />
@@ -61,9 +50,13 @@ export default function SettingsScreen() {
       }
     >
       <View className="gap-6">
+        {/* Appearance */}
         <View className="gap-3">
+          <AppText variant="label" tone="muted">
+            APPEARANCE
+          </AppText>
           <SegmentedControl
-            label="Appearance"
+            label="Theme"
             options={THEME_OPTIONS}
             value={mode}
             onChange={setMode}
@@ -74,7 +67,11 @@ export default function SettingsScreen() {
           </AppText>
         </View>
 
+        {/* Display */}
         <View className="gap-3">
+          <AppText variant="label" tone="muted">
+            DISPLAY
+          </AppText>
           <SegmentedControl
             label="CIDR display"
             options={CIDR_OPTIONS}
@@ -82,17 +79,16 @@ export default function SettingsScreen() {
             onChange={setCidrDisplayFormat}
           />
           <AppText variant="caption" tone="faint">
-            How subnets are shown in lists. Both forms parse identically; this changes
-            presentation only.
+            How subnets are shown in lists. Both forms parse identically; this changes presentation only.
           </AppText>
         </View>
 
+        {/* Advanced */}
         <Card>
           <View className="gap-1">
             <AppText variant="label">Advanced fields</AppText>
             <AppText variant="caption" tone="faint">
-              Show collapsed options on input screens. Off by default so the common case
-              stays a single field.
+              Show collapsed options on input screens. Off by default so the common case stays a single field.
             </AppText>
           </View>
           <View className="mt-3">
@@ -108,15 +104,26 @@ export default function SettingsScreen() {
           </View>
         </Card>
 
-        <Card>
+        {/* About & License */}
+        <Card className="gap-3">
           <View className="gap-1">
-            <AppText variant="label" tone="muted">
-              About
+            <AppText variant="subheading" tone="primary" className="font-semibold">
+              NetArchitect v1.0.0
+            </AppText>
+            <AppText variant="caption" tone="muted">
+              Offline-First IPv4 Subnet Calculator, VLSM Allocator & Security Auditor
+            </AppText>
+          </View>
+
+          <View className="gap-1 border-t border-line-subtle pt-2.5">
+            <AppText variant="caption" tone="faint">
+              Released as Open Source software under the MIT License.
             </AppText>
             <AppText variant="caption" tone="faint">
-              NetArchitect performs static analysis of network designs you enter. It does
-              not scan, test, or guarantee the security of any network, and it never
-              connects to one.
+              Copyright © 2026 Lance0519. All rights reserved under terms of the MIT License.
+            </AppText>
+            <AppText variant="caption" tone="faint" className="mt-1">
+              NetArchitect performs local static analysis. It does not scan, test, or connect to any network.
             </AppText>
           </View>
         </Card>

@@ -16,7 +16,7 @@
 
 import { Pressable, View } from 'react-native';
 
-import { AppText } from '@/components/AppText';
+import { AppText } from './AppText';
 import { cn } from '@/utils/cn';
 
 export interface SegmentOption<T extends string> {

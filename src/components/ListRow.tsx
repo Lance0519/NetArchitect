@@ -23,7 +23,7 @@ import { type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 
-import { AppText } from '@/components/AppText';
+import { AppText } from './AppText';
 import { cn } from '@/utils/cn';
 
 export interface ListRowProps {
@@ -71,7 +71,7 @@ export function ListRow({
           size={18}
           strokeWidth={2}
           className="shrink-0 text-ink-faint"
-          accessibilityElementsHidden
+          aria-hidden
         />
       ) : null}
     </View>
