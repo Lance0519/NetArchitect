@@ -15,11 +15,11 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F6F7FA",
+      "backgroundColor": "#0C1B3C",
       "dark": {
         "image": "./assets/splash-icon.png",
         "resizeMode": "contain",
-        "backgroundColor": "#0F1115"
+        "backgroundColor": "#0C1B3C"
       }
     },
 
@@ -29,9 +29,9 @@
     },
     "android": {
       "package": "com.netarchitect.app",
-      "edgeToEdgeEnabled": true,
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#F6F7FA",
+        "backgroundColor": "#0C1B3C",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

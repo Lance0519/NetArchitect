@@ -47,6 +47,8 @@ export interface ScreenProps extends Omit<ViewProps, 'children'> {
   title?: string;
   /** One line under the title. Keep it to context, not explanation. */
   subtitle?: string | undefined;
+  /** Custom element in header top-left (e.g. app logo) */
+  headerLeft?: ReactNode | undefined;
   /** Custom element in header top-right */
   headerRight?: ReactNode | undefined;
   /** Show settings shortcut button in header. Default true when title is provided. */
@@ -83,6 +85,7 @@ const WIDTH_CLASS = {
 export function Screen({
   title,
   subtitle,
+  headerLeft,
   headerRight,
   showSettings = true,
   scroll = false,
@@ -99,13 +102,16 @@ export function Screen({
   const header =
     title === undefined ? null : (
       <View className="mb-gutter-lg flex-row items-start justify-between">
-        <View className="flex-1 gap-1 pr-3">
-          <AppText variant="title">{title}</AppText>
-          {subtitle === undefined ? null : (
-            <AppText tone="muted" variant="body">
-              {subtitle}
-            </AppText>
-          )}
+        <View className="flex-1 flex-row items-center gap-3 pr-3">
+          {headerLeft}
+          <View className="flex-1 gap-1">
+            <AppText variant="title">{title}</AppText>
+            {subtitle === undefined ? null : (
+              <AppText tone="muted" variant="body">
+                {subtitle}
+              </AppText>
+            )}
+          </View>
         </View>
         {headerRight !== undefined ? (
           headerRight

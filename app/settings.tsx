@@ -13,7 +13,7 @@
 
 import { useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
-import { View } from 'react-native';
+import { Image, View } from 'react-native';
 
 import { AppText, Card, IconButton, Screen, SegmentedControl, type SegmentOption } from '@/components';
 import { useTheme } from '@/theme';
@@ -106,13 +106,21 @@ export default function SettingsScreen() {
 
         {/* About & License */}
         <Card className="gap-3">
-          <View className="gap-1">
-            <AppText variant="subheading" tone="primary" className="font-semibold">
-              NetArchitect v1.0.0
-            </AppText>
-            <AppText variant="caption" tone="muted">
-              Offline-First IPv4 Subnet Calculator, VLSM Allocator & Security Auditor
-            </AppText>
+          <View className="flex-row items-center gap-3">
+            <Image
+              source={require('../assets/NetArchitect_Logo.png')}
+              style={{ width: 44, height: 44, borderRadius: 22 }}
+              resizeMode="contain"
+              accessibilityLabel="NetArchitect Logo"
+            />
+            <View className="flex-1 gap-0.5">
+              <AppText variant="subheading" tone="primary" className="font-semibold">
+                NetArchitect v1.0.0
+              </AppText>
+              <AppText variant="caption" tone="muted">
+                Offline-First IPv4 Subnet Calculator, VLSM Allocator & Security Auditor
+              </AppText>
+            </View>
           </View>
 
           <View className="gap-1 border-t border-line-subtle pt-2.5">

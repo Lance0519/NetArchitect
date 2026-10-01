@@ -24,10 +24,13 @@ export {
 
 export { FONTS, hasResolvedMonoFont } from './typography';
 
-export {
-  ICON_COLORS,
-  getIconColor,
-  interopIcon,
-  useIconColor,
-  type IconTone,
-} from './icons';
+/**
+ * Only the `cssInterop` registration is exported, and deliberately so.
+ *
+ * This module used to also export `ICON_COLORS` - a hardcoded hex palette per
+ * scheme per tone - plus `getIconColor`/`useIconColor`. Nothing called them and
+ * they duplicated `global.css` in TypeScript, where `npm run verify:theme`
+ * cannot see a divergence. Icons take their colour from `className`, which
+ * resolves through `global.css`. See `icons.ts` for the full reasoning.
+ */
+export { interopIcon } from './icons';

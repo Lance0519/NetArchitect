@@ -21,7 +21,7 @@ import {
   BookOpen,
   Settings as SettingsIcon,
 } from 'lucide-react-native';
-import { Pressable, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 
 import { AppText, Card, Screen, StatusIndicator } from '@/components';
 import { NetworkStat } from '@/components/network';
@@ -78,7 +78,19 @@ export default function HomeScreen() {
     : 0;
 
   return (
-    <Screen title="NetArchitect" subtitle="Network Planning Assistant" scroll>
+    <Screen
+      title="NetArchitect"
+      subtitle="Network Planning Assistant"
+      headerLeft={
+        <Image
+          source={require('../../assets/NetArchitect_Logo.png')}
+          style={{ width: 44, height: 44, borderRadius: 22 }}
+          resizeMode="contain"
+          accessibilityLabel="NetArchitect Logo"
+        />
+      }
+      scroll
+    >
       <View className="gap-4">
         {/* Offline indicator */}
         <View className="flex-row items-center justify-between">

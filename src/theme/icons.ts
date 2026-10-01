@@ -9,10 +9,21 @@
  * In Dark Mode, black icons on dark backgrounds become invisible.
  *
  * ## The Solution
- * 1. Register `cssInterop` on all Lucide icons so NativeWind maps `className="text-..."`
- *    directly to the icon's `color` prop across both Light and Dark themes.
- * 2. Provide `useIconColor(tone)` and `getIconColor(scheme, tone)` for cases where
- *    components need the resolved theme color value as an explicit string.
+ * Register `cssInterop` on every Lucide icon used in the app, so NativeWind maps
+ * `className="text-..."` straight onto the icon's `color` prop in both schemes.
+ * Colour then comes from `className` and resolves through `global.css`, which is
+ * the only definition of the palette.
+ *
+ * ## There is deliberately no `getIconColor`
+ * This module used to also export `ICON_COLORS` - a hand-maintained table of hex
+ * values per scheme per tone, plus `getIconColor`/`useIconColor` accessors. Nothing
+ * called them, and they were a second copy of the palette in a language no gate
+ * could check: `scripts/verify-theme.cjs` reads `global.css` and the compiled
+ * stylesheet, so changing `--critical` there would have recoloured every text and
+ * border while leaving these hexes behind, with nothing to report the divergence.
+ *
+ * The escape hatch, should an icon ever genuinely need a literal colour, is a
+ * `className` the interop already handles - not a second palette.
  */
 
 import { cssInterop } from 'nativewind';
@@ -62,62 +73,6 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react-native';
-
-import { useTheme, type ResolvedScheme } from './useTheme';
-
-export type IconTone =
-  | 'primary'
-  | 'muted'
-  | 'faint'
-  | 'accent'
-  | 'critical'
-  | 'high'
-  | 'medium'
-  | 'info'
-  | 'success';
-
-/**
- * Exact color hexes mapped to design tokens from `global.css` and `src/theme/colors.ts`.
- */
-export const ICON_COLORS: Readonly<Record<ResolvedScheme, Readonly<Record<IconTone, string>>>> = Object.freeze({
-  light: Object.freeze({
-    primary: '#10131C',
-    muted: '#586073',
-    faint: '#6E7789',
-    accent: '#1D4ED8',
-    critical: '#BE1222',
-    high: '#B34407',
-    medium: '#8F5F06',
-    info: '#1D4ED8',
-    success: '#046C4E',
-  }),
-  dark: Object.freeze({
-    primary: '#F0F2F7',
-    muted: '#9EA6B6',
-    faint: '#747C8D',
-    accent: '#609CFF',
-    critical: '#FF8A8A',
-    high: '#FDBA74',
-    medium: '#EAC25A',
-    info: '#7DB3FF',
-    success: '#54D6A8',
-  }),
-});
-
-/**
- * Resolve an icon color for a given scheme and tone.
- */
-export function getIconColor(scheme: ResolvedScheme, tone: IconTone = 'muted'): string {
-  return ICON_COLORS[scheme][tone];
-}
-
-/**
- * React hook to retrieve the current theme-adapted color for a tone.
- */
-export function useIconColor(tone: IconTone = 'muted'): string {
-  const { scheme } = useTheme();
-  return ICON_COLORS[scheme][tone];
-}
 
 /**
  * Tags a LucideIcon with NativeWind's `cssInterop` so `className="text-..."` sets `color`.
