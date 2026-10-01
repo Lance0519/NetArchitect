@@ -48,7 +48,7 @@ jobs:
           cache: 'pip'
 
       - name: 5. Install Python dependencies
-        run: pip install pillow numpy
+        run: pip install -r requirements.txt
 
       - name: 6. Install Node dependencies
         run: npm ci

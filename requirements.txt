@@ -1,0 +1,8 @@
+# Python dependencies for scripts/generate-assets.py, which renders the
+# high-resolution app icons and Android drawables during the APK build.
+# Kept minimal on purpose: the app itself is TypeScript and ships no Python.
+#
+# Also referenced by actions/setup-python's `cache: 'pip'`, which requires a
+# dependency file to hash the pip cache against.
+pillow>=11,<13
+numpy>=2,<3
