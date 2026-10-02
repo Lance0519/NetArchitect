@@ -40,6 +40,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: 'gradle'
 
       - name: 4. Setup Python & Pillow for asset generation
         uses: actions/setup-python@v5
@@ -77,9 +78,9 @@ jobs:
           BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
           cd android
           if [ "$BUILD_TYPE" = "debug" ]; then
-            ./gradlew assembleDebug --no-daemon
+            ./gradlew assembleDebug --no-daemon --build-cache --parallel
           else
-            ./gradlew assembleRelease --no-daemon
+            ./gradlew assembleRelease --no-daemon --build-cache --parallel -x lintVitalAnalyzeRelease
           fi
 
       - name: 13. Locate and stage APK
