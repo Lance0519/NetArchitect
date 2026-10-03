@@ -114,38 +114,45 @@ def main():
     }
     for folder, dims in mipmap_densities.items():
         out_dir = os.path.join(ANDROID_RES_DIR, folder)
-        os.makedirs(out_dir, exist_ok=True)
+        if not os.path.exists(out_dir):
+            continue
         
-        # ic_launcher.webp (legacy square/rounded launcher icon)
+        # Clean up any conflicting webp files that cause AAPT2 duplicate resource errors
+        for stem in ['ic_launcher', 'ic_launcher_round', 'ic_launcher_background', 'ic_launcher_foreground', 'ic_launcher_monochrome']:
+            webp_file = os.path.join(out_dir, f'{stem}.webp')
+            if os.path.exists(webp_file):
+                os.remove(webp_file)
+
+        # ic_launcher.png (legacy square/rounded launcher icon)
         l_size = dims['launcher']
         ic_launcher = Image.new('RGBA', (l_size, l_size), BG_COLOR + (255,))
         l_emb = emblem_img.resize((int(l_size * 0.70), int(l_size * 0.70)), Image.Resampling.LANCZOS)
         l_off = (l_size - l_emb.size[0]) // 2
         ic_launcher.paste(l_emb, (l_off, l_off), l_emb)
-        ic_launcher.save(os.path.join(out_dir, 'ic_launcher.webp'), 'WEBP')
+        ic_launcher.save(os.path.join(out_dir, 'ic_launcher.png'), 'PNG')
         
-        # ic_launcher_round.webp (legacy circular launcher icon)
+        # ic_launcher_round.png (legacy circular launcher icon)
         round_logo = orig_logo.resize((l_size, l_size), Image.Resampling.LANCZOS)
-        round_logo.save(os.path.join(out_dir, 'ic_launcher_round.webp'), 'WEBP')
+        round_logo.save(os.path.join(out_dir, 'ic_launcher_round.png'), 'PNG')
         
-        # ic_launcher_background.webp
+        # ic_launcher_background.png
         a_size = dims['adaptive']
-        bg_webp = Image.new('RGBA', (a_size, a_size), BG_COLOR + (255,))
-        bg_webp.save(os.path.join(out_dir, 'ic_launcher_background.webp'), 'WEBP')
+        bg_png = Image.new('RGBA', (a_size, a_size), BG_COLOR + (255,))
+        bg_png.save(os.path.join(out_dir, 'ic_launcher_background.png'), 'PNG')
         
-        # ic_launcher_foreground.webp
-        fg_webp = Image.new('RGBA', (a_size, a_size), (0, 0, 0, 0))
+        # ic_launcher_foreground.png
+        fg_png = Image.new('RGBA', (a_size, a_size), (0, 0, 0, 0))
         fg_sub = emblem_img.resize((int(a_size * 0.65), int(a_size * 0.65)), Image.Resampling.LANCZOS)
         fg_off = (a_size - fg_sub.size[0]) // 2
-        fg_webp.paste(fg_sub, (fg_off, fg_off), fg_sub)
-        fg_webp.save(os.path.join(out_dir, 'ic_launcher_foreground.webp'), 'WEBP')
+        fg_png.paste(fg_sub, (fg_off, fg_off), fg_sub)
+        fg_png.save(os.path.join(out_dir, 'ic_launcher_foreground.png'), 'PNG')
         
-        # ic_launcher_monochrome.webp
-        mono_webp = Image.new('RGBA', (a_size, a_size), (0, 0, 0, 0))
+        # ic_launcher_monochrome.png
+        mono_png = Image.new('RGBA', (a_size, a_size), (0, 0, 0, 0))
         mono_sub = mono_img.resize((int(a_size * 0.65), int(a_size * 0.65)), Image.Resampling.LANCZOS)
         mono_off = (a_size - mono_sub.size[0]) // 2
-        mono_webp.paste(mono_sub, (mono_off, mono_off), mono_sub)
-        mono_webp.save(os.path.join(out_dir, 'ic_launcher_monochrome.webp'), 'WEBP')
+        mono_png.paste(mono_sub, (mono_off, mono_off), mono_sub)
+        mono_png.save(os.path.join(out_dir, 'ic_launcher_monochrome.png'), 'PNG')
         
         print(f"Generated {folder} assets")
 
