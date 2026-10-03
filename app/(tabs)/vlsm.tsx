@@ -68,6 +68,7 @@ export default function VlsmScreen() {
     <Screen
       title="VLSM Allocator"
       subtitle="Fit variable-length subnets into a parent block."
+      back={false}
       width="full"
       scroll
     >

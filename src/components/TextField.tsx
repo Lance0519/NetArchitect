@@ -94,8 +94,15 @@ export const TextField = forwardRef<RNTextInput, TextFieldProps>(function TextFi
           accessibilityHint={hasError ? error : hint}
           aria-invalid={hasError}
           placeholderTextColor={rest.placeholderTextColor ?? defaultPlaceholderColor}
+          // `min-h-touch` is on the input, not only on the wrapper above. The
+          // wrapper's padding is not part of the tap target - the input is what
+          // the finger has to hit - so a floor on the wrapper alone left the real
+          // target at 37pt. And `min-h-touch` rather than more padding, because
+          // this is a bespoke token that tailwind-merge does not group, so it
+          // survives a caller's `py-*` override, and CSS min-height beats padding
+          // regardless.
           className={cn(
-            'flex-1 py-2.5 text-body text-ink',
+            'min-h-touch flex-1 py-2.5 text-body text-ink',
             // A multiline field must be able to grow; `flex-1` on a fixed-height
             // row would clip it.
             rest.multiline && 'py-2',

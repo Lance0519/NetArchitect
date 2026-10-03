@@ -12,8 +12,8 @@
  */
 
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { CheckCircle, ChevronLeft, XCircle } from 'lucide-react-native';
+import { View } from 'react-native';
+import { CheckCircle, XCircle } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { AppText, Button, Card, ProgressBar, Screen } from '@/components';
@@ -57,25 +57,26 @@ export default function PracticeScreen() {
     recordAttempt(questionType, selectedIndex === question.correctIndex);
   };
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/learning');
+    }
+  };
+
   const handleNext = () => {
     handleGenerate();
   };
 
   return (
-    <Screen title="Practice" subtitle="Test your understanding." scroll>
+    <Screen
+      title="Practice"
+      subtitle="Test your understanding."
+      onBack={handleBack}
+      scroll
+    >
       <View className="gap-4">
-        {/* Back button */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to Topics"
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/learning'))}
-          className="flex-row items-center gap-1.5 self-start py-1 active:opacity-70"
-        >
-          <ChevronLeft size={18} strokeWidth={2.5} className="text-accent" />
-          <AppText variant="caption" tone="accent" className="font-semibold">
-            Back to Topics
-          </AppText>
-        </Pressable>
         {/* Progress */}
         <Card padding="md">
           <View className="gap-2">

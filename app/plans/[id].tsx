@@ -21,7 +21,6 @@ import {
   Trash2,
   AlertTriangle,
   ChevronDown,
-  ChevronLeft,
   ChevronUp,
   ShieldCheck,
 } from 'lucide-react-native';
@@ -109,19 +108,8 @@ export default function PlanDetailScreen({ route }: { route?: { params: { id: st
 
   if (!plan) {
     return (
-      <Screen title="Plan Not Found" subtitle="" scroll>
+      <Screen title="Plan Not Found" subtitle="" onBack={handleBack} scroll>
         <View className="gap-4">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back to Plans"
-            onPress={handleBack}
-            className="flex-row items-center gap-1.5 py-1"
-          >
-            <ChevronLeft size={18} strokeWidth={2.5} className="text-accent" />
-            <AppText variant="caption" tone="accent" className="font-medium">
-              Back to Saved Plans
-            </AppText>
-          </Pressable>
           <Card padding="lg" className="items-center justify-center gap-2">
             <AppText variant="subheading" tone="primary">Plan does not exist</AppText>
             <AppText variant="caption" tone="muted">This plan may have been deleted.</AppText>
@@ -182,20 +170,13 @@ export default function PlanDetailScreen({ route }: { route?: { params: { id: st
   const highFindings = findings.filter((f) => f.kind === 'duplicate-vlan').length;
 
   return (
-    <Screen title={plan.name} subtitle={`${plan.subnets.length} subnets · ${plan.parentCidr}`} scroll>
+    <Screen
+      title={plan.name}
+      subtitle={`${plan.subnets.length} subnets · ${plan.parentCidr}`}
+      onBack={handleBack}
+      scroll
+    >
       <View className="gap-4">
-        {/* Back navigation */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to Plans"
-          onPress={handleBack}
-          className="flex-row items-center gap-1.5 self-start py-1 active:opacity-70"
-        >
-          <ChevronLeft size={18} strokeWidth={2.5} className="text-accent" />
-          <AppText variant="caption" tone="accent" className="font-semibold">
-            Back to Saved Plans
-          </AppText>
-        </Pressable>
         {/* Summary card */}
         {view?.summary ? (
           <Card padding="lg">

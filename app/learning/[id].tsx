@@ -9,12 +9,11 @@
  */
 
 import { useMemo } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   BookOpen,
   CheckCircle2,
-  ChevronLeft,
   ChevronRight,
   HelpCircle,
   Lightbulb,
@@ -72,19 +71,8 @@ export default function TopicDetailScreen() {
 
   if (!topic) {
     return (
-      <Screen title="Topic Not Found" subtitle="" scroll>
+      <Screen title="Topic Not Found" subtitle="" onBack={handleBack} scroll>
         <View className="gap-4">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back to Topics"
-            onPress={handleBack}
-            className="flex-row items-center gap-1.5 py-1"
-          >
-            <ChevronLeft size={18} strokeWidth={2.5} className="text-accent" />
-            <AppText variant="caption" tone="accent" className="font-medium">
-              Back to Topics
-            </AppText>
-          </Pressable>
           <Card padding="lg" className="items-center justify-center gap-2">
             <AppText variant="subheading" tone="primary">
               Topic does not exist
@@ -102,22 +90,15 @@ export default function TopicDetailScreen() {
   }
 
   return (
-    <Screen title={topic.title} subtitle={topic.description} scroll>
+    <Screen
+      title={topic.title}
+      subtitle={topic.description}
+      onBack={handleBack}
+      scroll
+    >
       <View className="gap-4">
-        {/* Navigation & Progress bar */}
-        <View className="flex-row items-center justify-between">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back to Topics"
-            onPress={handleBack}
-            className="flex-row items-center gap-1.5 py-1 active:opacity-70"
-          >
-            <ChevronLeft size={18} strokeWidth={2.5} className="text-accent" />
-            <AppText variant="caption" tone="accent" className="font-semibold">
-              All Topics
-            </AppText>
-          </Pressable>
-
+        {/* Progress. Trailing-aligned now that the header owns the back button. */}
+        <View className="flex-row items-center justify-end">
           {isMastered ? (
             <Badge tone="success">Mastered ✓</Badge>
           ) : topicProgress && topicProgress.attempts > 0 ? (

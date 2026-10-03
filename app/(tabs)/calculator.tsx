@@ -115,6 +115,7 @@ export default function CalculatorScreen() {
     <Screen
       title={meta.title}
       subtitle={meta.subtitle}
+      back={false}
       width="form"
       scroll
     >
@@ -157,7 +158,11 @@ export default function CalculatorScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Load example ${ex.cidr}`}
                   onPress={() => setInputCidr(ex.cidr)}
-                  className="rounded-pill border border-line bg-surface-raised px-3 py-1.5 active:bg-accent active:border-accent"
+                  // `active:bg-accent-soft` rather than `active:bg-accent`: the
+                  // label is `text-accent`, so an accent fill on press painted the
+                  // label the same colour as its own background and the pill read
+                  // as blank for as long as it was held.
+                  className="min-h-touch items-center rounded-pill border border-line bg-surface-raised px-3 py-1.5 active:border-accent active:bg-accent-soft"
                 >
                   <AppText variant="caption" tone="accent" mono>
                     {ex.label}

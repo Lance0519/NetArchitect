@@ -11,11 +11,9 @@
  * - Consistent with app design language
  */
 
-import { useRouter } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
 import { Image, View } from 'react-native';
 
-import { AppText, Card, IconButton, Screen, SegmentedControl, type SegmentOption } from '@/components';
+import { AppText, Card, Screen, SegmentedControl, type SegmentOption } from '@/components';
 import { useTheme } from '@/theme';
 import { useUiStore, type CidrDisplayFormat, type ThemeMode } from '@/store/ui-store';
 
@@ -31,7 +29,6 @@ const CIDR_OPTIONS: readonly SegmentOption<CidrDisplayFormat>[] = [
 ];
 
 export default function SettingsScreen() {
-  const router = useRouter();
   const { mode, scheme, setMode } = useTheme();
   const cidrDisplayFormat = useUiStore((s) => s.cidrDisplayFormat);
   const setCidrDisplayFormat = useUiStore((s) => s.setCidrDisplayFormat);
@@ -39,16 +36,7 @@ export default function SettingsScreen() {
   const setShowAdvancedFields = useUiStore((s) => s.setShowAdvancedFields);
 
   return (
-    <Screen
-      title="Settings"
-      scroll
-      width="form"
-      footer={
-        <IconButton label="Go back" onPress={() => router.back()}>
-          <ChevronLeft size={20} strokeWidth={2} className="text-ink-muted" />
-        </IconButton>
-      }
-    >
+    <Screen title="Settings" scroll width="form">
       <View className="gap-6">
         {/* Appearance */}
         <View className="gap-3">

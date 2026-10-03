@@ -54,8 +54,15 @@ export default function LearningScreen() {
           return (
             <Card key={topic.id} padding="md">
               <Pressable
+                accessibilityRole="button"
+                // Built from the row's own text, so the accessible name cannot
+                // drift from what is on screen - the same contract ListRow holds
+                // itself to. Without this the row is an unlabelled tappable
+                // region: a screen reader announces the topic text and nothing
+                // about it being navigable.
+                accessibilityLabel={`${topic.title}. ${topic.description}`}
                 onPress={() => router.push(`/learning/${topic.id}` as any)}
-                className="flex-row items-start gap-3 active:bg-surface-raised"
+                className="min-h-touch flex-row items-start gap-3 active:bg-surface-raised"
               >
                 <View className="flex-1 gap-1">
                   <View className="flex-row items-center gap-2">
@@ -80,7 +87,7 @@ export default function LearningScreen() {
                     </View>
                   ) : null}
                 </View>
-                <ChevronRight size={20} className="text-ink-muted" />
+                <ChevronRight size={20} className="text-ink-muted" aria-hidden />
               </Pressable>
             </Card>
           );

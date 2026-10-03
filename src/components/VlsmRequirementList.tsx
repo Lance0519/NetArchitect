@@ -176,7 +176,13 @@ export function VlsmRequirementList({
                       accessibilityLabel={opt.label}
                       onPress={() => onChange(row.id, { role: opt.value })}
                       className={cn(
-                        'min-h-[36px] flex-row items-center justify-center rounded-pill border px-3 py-1.5',
+                        // `min-h-touch`, not the `min-h-[36px]` this used to carry.
+                        // These pills sit in a horizontal scroller, so their width is
+                        // unaffected by the taller floor and nothing is lost but a
+                        // few points of row height - which is the correct trade
+                        // against a 36pt target on a control that has to be hit while
+                        // the user is typing a host count above it.
+                        'min-h-touch flex-row items-center justify-center rounded-pill border px-3 py-1.5',
                         isSelected
                           ? 'border-accent bg-accent'
                           : 'border-line bg-surface active:bg-surface-raised',

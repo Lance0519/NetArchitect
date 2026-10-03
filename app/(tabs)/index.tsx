@@ -81,6 +81,7 @@ export default function HomeScreen() {
     <Screen
       title="NetArchitect"
       subtitle="Network Planning Assistant"
+      back={false}
       headerLeft={
         <Image
           source={require('../../assets/NetArchitect_Logo.png')}
@@ -133,10 +134,16 @@ export default function HomeScreen() {
             </View>
 
             <View className="flex-row gap-2 pt-2 border-t border-line-subtle">
+              {/* `flex-1`, not `block`. `block` is `w-full`, and React Native's
+                  default `flexShrink` is 0 rather than CSS's 1, so two full-width
+                  buttons in a row do not share it - they overflow, and the second
+                  one renders off-screen where it cannot be tapped. `flex-1` is
+                  `flex: 1 1 0%`, which sets the shrink AND zeroes the basis, so
+                  the pair splits the row exactly. */}
               <Button
                 variant="secondary"
                 size="sm"
-                block
+                className="flex-1"
                 onPress={() => router.push(`/plans/${activePlan.id}` as any)}
               >
                 Open Plan
@@ -144,7 +151,7 @@ export default function HomeScreen() {
               <Button
                 variant="secondary"
                 size="sm"
-                block
+                className="flex-1"
                 onPress={() => router.push('/(tabs)/audit')}
               >
                 Audit
@@ -189,6 +196,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Open IP Calculator"
               onPress={() => router.push('/(tabs)/calculator')}
+              className="min-h-touch justify-center"
             >
               <AppText variant="caption" tone="accent">
                 Open Calculator
@@ -203,7 +211,7 @@ export default function HomeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`${ref.prefix} - ${ref.hosts} - ${ref.mask}`}
                 onPress={() => router.push('/(tabs)/calculator')}
-                className="flex-row items-center justify-between rounded-control border border-line-subtle bg-surface-raised px-3 py-2 active:bg-surface"
+                className="flex-row min-h-touch items-center justify-between rounded-control border border-line-subtle bg-surface-raised px-3 py-2 active:bg-surface"
               >
                 <View className="flex-row items-center gap-3">
                   <AppText mono variant="subheading" tone="accent">
@@ -333,7 +341,7 @@ export default function HomeScreen() {
           <View className="flex-row gap-2">
             <Button
               variant="secondary"
-              block
+              className="flex-1"
               icon={<BookOpen size={16} strokeWidth={2} />}
               onPress={() => router.push('/learning')}
             >
@@ -341,7 +349,7 @@ export default function HomeScreen() {
             </Button>
             <Button
               variant="secondary"
-              block
+              className="flex-1"
               icon={<SettingsIcon size={16} strokeWidth={2} />}
               onPress={() => router.push('/settings')}
             >

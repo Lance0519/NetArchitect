@@ -96,7 +96,12 @@ export default function AuditScreen() {
   const totalCritical = criticalCount + highCount;
 
   return (
-    <Screen title="Security Audit" subtitle="Static design review of a saved plan." scroll>
+    <Screen
+      title="Security Audit"
+      subtitle="Static design review of a saved plan."
+      back={false}
+      scroll
+    >
       <View className="gap-4">
         {/* Disclaimer */}
         <Banner tone="warn" title="What this does not do">

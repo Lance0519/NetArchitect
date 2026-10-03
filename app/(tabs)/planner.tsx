@@ -129,6 +129,7 @@ export default function PlannerScreen() {
     <Screen
       title="Network Planner"
       subtitle="Build a plan from a site and its needs."
+      back={false}
       scroll
     >
       <View className="gap-4">

@@ -56,9 +56,10 @@ export default function PlansListScreen() {
           <Search size={20} strokeWidth={2} className="text-ink-muted shrink-0" />
           <TextInput
             placeholder="Search by name..."
+            accessibilityLabel="Search plans by name"
             value={searchQuery}
             onChangeText={setSearchQuery}
-            className="flex-1 text-ink"
+            className="min-h-touch flex-1 text-ink"
             placeholderTextColor={scheme === 'dark' ? '#94A3B8' : '#64748B'}
             autoCapitalize="none"
             autoCorrect={false}
@@ -146,6 +147,10 @@ function PlanCard({
         variant="ghost"
         block
         onPress={onPress}
+        // The children below are plain Views, so the Pressable has no text to
+        // derive a name from and announces as a bare "button". Spelled out from
+        // the same values the card displays, so the two cannot disagree.
+        accessibilityLabel={`${plan.name}. ${plan.parentCidr}. ${plan.subnets.length} subnet${plan.subnets.length === 1 ? '' : 's'}. Updated ${formatRelative(plan.updatedAt)}.`}
         className="flex-row items-center gap-3 p-0"
         icon={null}
       >

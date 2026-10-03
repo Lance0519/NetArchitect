@@ -13,6 +13,11 @@
  * centres the content instead, so the layout is the same on a phone and a
  * 13-inch iPad.
  *
+ * **The back button.** A header without one is a screen the user cannot leave on
+ * a platform with no hardware back gesture. Owning it here means `canGoBack()`
+ * decides, so tab roots show nothing and pushed screens are correct without
+ * being asked. See the `back` prop for why this was not left to each screen.
+ *
  * **The keyboard.** Forms are the majority of this app, and on iOS a focused
  * field at the bottom of a scrolling view is otherwise unreachable. The
  * `KeyboardAvoidingView` plus a bottom inset is what stops that.
@@ -37,7 +42,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useRouter } from 'expo-router';
-import { Settings } from 'lucide-react-native';
+import { ChevronLeft, Settings } from 'lucide-react-native';
 import { AppText } from './AppText';
 import { IconButton } from './Button';
 import { cn } from '@/utils/cn';
@@ -51,6 +56,33 @@ export interface ScreenProps extends Omit<ViewProps, 'children'> {
   headerLeft?: ReactNode | undefined;
   /** Custom element in header top-right */
   headerRight?: ReactNode | undefined;
+  /**
+   * Show a back button. Default `true`.
+   *
+   * The button appears only when there is history to return to
+   * (`router.canGoBack()`).
+   *
+   * **Tab roots must pass `back={false}`.** It is tempting to assume a tab root
+   * has no history and needs no special-casing. That is false, and measurably so:
+   * bottom tabs push each visited tab onto the stack on every platform, so after
+   * Home -> Settings -> Tools the Tools tab has history and the chevron appears
+   * there. It then leads somewhere unrelated to the tab bar sitting directly
+   * beneath it, which is worse than having no chevron at all.
+   *
+   * This lives here rather than in each screen because the header is owned here.
+   * When it was not owned here, four screens each hand-rolled a back control and
+   * all four disagreed: one put it in the page footer, three used an inline text
+   * link under the title, and the icon sizes and stroke weights did not match. A
+   * new pushed screen would have had a fifth.
+   */
+  back?: boolean | undefined;
+  /**
+   * What the back button does. Defaults to `router.back()`.
+   *
+   * Supply this when leaving the screen has to be conditional - a not-found state
+   * that should fall back to a `replace()` rather than pop, for instance.
+   */
+  onBack?: (() => void) | undefined;
   /** Show settings shortcut button in header. Default true when title is provided. */
   showSettings?: boolean;
   /**
@@ -87,6 +119,8 @@ export function Screen({
   subtitle,
   headerLeft,
   headerRight,
+  back = true,
+  onBack,
   showSettings = true,
   scroll = false,
   avoidKeyboard = true,
@@ -99,11 +133,22 @@ export function Screen({
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  // A caller-supplied `headerLeft` wins. Otherwise the leading slot goes to the
+  // back button, and only when there is somewhere to go back to.
+  const leading =
+    headerLeft !== undefined ? (
+      headerLeft
+    ) : back !== false && router.canGoBack() ? (
+      <IconButton label="Go back" onPress={onBack ?? (() => router.back())}>
+        <ChevronLeft size={22} strokeWidth={2} className="text-ink-muted" />
+      </IconButton>
+    ) : null;
+
   const header =
     title === undefined ? null : (
       <View className="mb-gutter-lg flex-row items-start justify-between">
         <View className="flex-1 flex-row items-center gap-3 pr-3">
-          {headerLeft}
+          {leading}
           <View className="flex-1 gap-1">
             <AppText variant="title">{title}</AppText>
             {subtitle === undefined ? null : (
