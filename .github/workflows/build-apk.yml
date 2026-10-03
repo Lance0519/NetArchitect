@@ -73,11 +73,7 @@ jobs:
 
       - name: 12. Configure Gradle memory and workers for CI
         run: |
-          {
-            echo "org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m"
-            echo "org.gradle.workers.max=2"
-            echo "org.gradle.parallel=false"
-          } >> android/gradle.properties
+          printf "\norg.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m\norg.gradle.workers.max=2\norg.gradle.parallel=false\n" >> android/gradle.properties
 
       - name: 13. Build APK with Gradle
         env:
