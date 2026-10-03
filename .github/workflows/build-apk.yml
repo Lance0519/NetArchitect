@@ -97,7 +97,18 @@ jobs:
           if [ "$BUILD_TYPE" = "debug" ]; then
             ./gradlew assembleDebug --no-daemon --build-cache --console=plain --stacktrace --info 2>&1 | tee "$RUNNER_TEMP/gradle-logs/build.log"
           else
-            ./gradlew assembleRelease --no-daemon --build-cache --console=plain --stacktrace --info -x lintVitalAnalyzeRelease -x lintVitalReportRelease 2>&1 | tee "$RUNNER_TEMP/gradle-logs/build.log"
+            # lintVitalRelease must be excluded too, not just its two children.
+            # It is the umbrella task that assembleRelease depends on, and it
+            # declares returnValueInputFile as the output of lintVitalReportRelease.
+            # Excluding only the children leaves the parent running with a file
+            # that is never produced, which fails at configuration time:
+            #   property 'returnValueInputFile' specifies file
+            #   '.../lint_vital_return_value/release/lintVitalReportRelease/return-value-release.txt'
+            #   which doesn't exist.
+            # All three are listed so the whole lint-vital subtree across the 13
+            # modules is skipped rather than running 13 analysis tasks whose only
+            # consumer was excluded.
+            ./gradlew assembleRelease --no-daemon --build-cache --console=plain --stacktrace --info -x lintVitalRelease -x lintVitalAnalyzeRelease -x lintVitalReportRelease 2>&1 | tee "$RUNNER_TEMP/gradle-logs/build.log"
           fi
 
       - name: 13b. Surface the Gradle failure reason
