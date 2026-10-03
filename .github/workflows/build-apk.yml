@@ -62,8 +62,16 @@ jobs:
 
       - name: 9. Setup Gradle Cache
         uses: gradle/actions/setup-gradle@v4
-        with:
-          build-root-directory: android
+        # No `with:` block. The previous `build-root-directory: android` was not a
+        # valid input for this action - v4 rejected it by name and listed every
+        # input it does accept, none of which was that one. An unknown input makes
+        # the step fail validation, so the cache was never configured and every
+        # run rebuilt all four ABIs of C++ from cold. That is what turned a
+        # routine build into a 22-minute one, which is where the memory pressure
+        # that step 13 dies under comes from.
+        #
+        # setup-gradle finds the Gradle user home and the project cache on its
+        # own; there is nothing to point it at.
 
       - name: 10. Generate high-resolution icons and drawables
         run: python scripts/generate-assets.py
@@ -80,12 +88,52 @@ jobs:
           NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
           BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
+          mkdir -p "$RUNNER_TEMP/gradle-logs"
           cd android
+          # `pipefail` is not set by default in a bare `run:` block on GitHub, so
+          # without this the `tee` below would swallow Gradle's exit status and
+          # this step would report success on a failed build.
+          set -o pipefail
           if [ "$BUILD_TYPE" = "debug" ]; then
-            ./gradlew assembleDebug --no-daemon --build-cache --console=plain --stacktrace --info
+            ./gradlew assembleDebug --no-daemon --build-cache --console=plain --stacktrace --info 2>&1 | tee "$RUNNER_TEMP/gradle-logs/build.log"
           else
-            ./gradlew assembleRelease --no-daemon --build-cache --console=plain --stacktrace --info -x lintVitalAnalyzeRelease -x lintVitalReportRelease
+            ./gradlew assembleRelease --no-daemon --build-cache --console=plain --stacktrace --info -x lintVitalAnalyzeRelease -x lintVitalReportRelease 2>&1 | tee "$RUNNER_TEMP/gradle-logs/build.log"
           fi
+
+      - name: 13b. Surface the Gradle failure reason
+        if: failure()
+        run: |
+          LOG="$RUNNER_TEMP/gradle-logs/build.log"
+          if [ ! -f "$LOG" ]; then
+            echo "::warning title=Gradle::No Gradle log was captured, so the cause is unavailable."
+            exit 0
+          fi
+          # Job summaries and annotations are the only parts of a failed run that
+          # stay readable without authenticating to the API, so the cause is put
+          # in both. A build that fails with nothing but "exit code 1" cannot be
+          # diagnosed and gets re-guessed at, which is what happened for eight
+          # runs before this step existed.
+          {
+            echo "## Gradle build failure"
+            echo
+            echo '```'
+            grep -nE "FAILURE:|What went wrong|Execution failed for task|OutOfMemoryError|GC overhead limit|Caused by:|error: |ninja: error" "$LOG" | tail -n 80 || true
+            echo '```'
+            echo
+            echo "<details><summary>Last 60 lines</summary>"
+            echo
+            echo '```'
+            tail -n 60 "$LOG"
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+          grep -mE "FAILURE:|What went wrong|Execution failed for task|OutOfMemoryError|GC overhead limit|ninja: error" "$LOG" \
+            | head -n 20 \
+            | sed 's/%/%25/g' \
+            | while IFS= read -r line; do
+                echo "::error title=Gradle failure::${line}"
+              done || true
 
       - name: 14. Locate and stage APK
         run: |
