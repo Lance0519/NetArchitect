@@ -1,0 +1,79 @@
+name: Deploy Web Demo to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy Web Demo
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: 1. Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 2. Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 3. Install dependencies
+        run: npm ci
+
+      - name: 4. Run quality & test verification
+        run: npm run check
+
+      - name: 5. Configure baseUrl for GitHub Pages
+        run: |
+          node -e "
+            const fs = require('fs');
+            const repo = (process.env.GITHUB_REPOSITORY || 'Lance0519/NetArchitect').split('/')[1] || 'NetArchitect';
+            const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            app.expo = app.expo || {};
+            app.expo.experiments = app.expo.experiments || {};
+            app.expo.experiments.baseUrl = '/' + repo;
+            fs.writeFileSync('app.json', JSON.stringify(app, null, 2));
+            console.log('Set expo.experiments.baseUrl to:', app.expo.experiments.baseUrl);
+          "
+
+      - name: 6. Build Web production bundle
+        run: npx expo export --platform web --output-dir dist --clear
+
+      - name: 7. Verify Web bundle integrity
+        run: node scripts/verify-bundle-web.cjs dist
+
+      - name: 8. Prepare SPA assets for GitHub Pages
+        run: |
+          # Prevent Jekyll from ignoring files in directories starting with an underscore (_expo)
+          touch dist/.nojekyll
+
+          # Support client-side routing on page refresh and deep links
+          cp dist/index.html dist/404.html
+
+      - name: 9. Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: 10. Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: 11. Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

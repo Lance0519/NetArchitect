@@ -74,18 +74,20 @@ jobs:
       - name: 12. Configure Gradle memory and workers for CI
         run: |
           {
-            echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dkotlin.daemon.jvm.options=-Xmx2g"
+            echo "org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m"
             echo "org.gradle.workers.max=2"
           } >> android/gradle.properties
 
       - name: 13. Build APK with Gradle
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
           BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
           cd android
           if [ "$BUILD_TYPE" = "debug" ]; then
-            ./gradlew assembleDebug --no-daemon --build-cache --parallel --console=plain
+            ./gradlew assembleDebug --no-daemon --build-cache --parallel --console=plain --stacktrace
           else
-            ./gradlew assembleRelease --no-daemon --build-cache --parallel --console=plain -x lintVitalAnalyzeRelease -x lintVitalReportRelease
+            ./gradlew assembleRelease --no-daemon --build-cache --parallel --console=plain --stacktrace -x lintVitalAnalyzeRelease -x lintVitalReportRelease
           fi
 
       - name: 14. Locate and stage APK
