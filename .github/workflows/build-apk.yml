@@ -104,36 +104,47 @@ jobs:
         if: failure()
         run: |
           LOG="$RUNNER_TEMP/gradle-logs/build.log"
-          if [ ! -f "$LOG" ]; then
-            echo "::warning title=Gradle::No Gradle log was captured, so the cause is unavailable."
-            exit 0
-          fi
-          # Job summaries and annotations are the only parts of a failed run that
-          # stay readable without authenticating to the API, so the cause is put
-          # in both. A build that fails with nothing but "exit code 1" cannot be
-          # diagnosed and gets re-guessed at, which is what happened for eight
-          # runs before this step existed.
+          # Annotations - not the job summary - are the channel here. The logs API
+          # and the summary are both unreadable without authenticating, even for a
+          # public repository, but
+          #   GET /repos/{owner}/{repo}/check-runs/{id}/annotations
+          # answers unauthenticated. A run that reports only "Process completed
+          # with exit code 1" is undiagnosable, which is the condition the three
+          # previous fix attempts were made under.
+          #
+          # The previous version of this step grepped for known failure strings
+          # (FAILURE:, What went wrong, OOM, ninja:). It emitted nothing, which
+          # proves the build died without printing any of them - so matching on
+          # expected strings was the wrong shape. This version is pattern-free: it
+          # reports the tail of the log whatever it contains, including the case
+          # where the log is empty.
+          emit() {
+            printf '::error title=%s::%s\n' "$1" \
+              "$(printf '%s' "$2" | sed -e 's/%/%25/g' -e 's/\r//g' -e 's/::/: :/g' | cut -c1-900)"
+          }
           {
             echo "## Gradle build failure"
             echo
             echo '```'
-            grep -nE "FAILURE:|What went wrong|Execution failed for task|OutOfMemoryError|GC overhead limit|Caused by:|error: |ninja: error" "$LOG" | tail -n 80 || true
+            tail -n 150 "$LOG" 2>/dev/null || echo "(no log captured)"
             echo '```'
-            echo
-            echo "<details><summary>Last 60 lines</summary>"
-            echo
-            echo '```'
-            tail -n 60 "$LOG"
-            echo '```'
-            echo
-            echo "</details>"
-          } >> "$GITHUB_STEP_SUMMARY"
-          grep -mE "FAILURE:|What went wrong|Execution failed for task|OutOfMemoryError|GC overhead limit|ninja: error" "$LOG" \
-            | head -n 20 \
-            | sed 's/%/%25/g' \
-            | while IFS= read -r line; do
-                echo "::error title=Gradle failure::${line}"
-              done || true
+          } >> "$GITHUB_STEP_SUMMARY" || true
+          if [ ! -f "$LOG" ]; then
+            emit "Gradle log missing" "No build log was written to $LOG"
+          else
+            emit "Gradle log" "bytes=$(wc -c < "$LOG") lines=$(wc -l < "$LOG")"
+            if [ ! -s "$LOG" ]; then
+              emit "Gradle log empty" "Gradle wrote nothing to stdout or stderr."
+            fi
+            tail -n 15 "$LOG" | while IFS= read -r line; do
+              emit "Gradle failure" "$line"
+            done
+          fi
+          # A 4-ABI new-architecture build is large enough to hit the runner's
+          # disk or memory ceiling, and neither produces a Gradle failure banner.
+          # Both are cheap to rule out while reading the same output.
+          emit "Runner disk" "$(df -h "$RUNNER_TEMP" | tail -n 1)"
+          emit "Runner memory" "$(free -m | sed -n '2p')"
 
       - name: 14. Locate and stage APK
         run: |
