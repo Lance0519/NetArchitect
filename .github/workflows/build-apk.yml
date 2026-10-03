@@ -132,13 +132,31 @@ jobs:
           if [ ! -f "$LOG" ]; then
             emit "Gradle log missing" "No build log was written to $LOG"
           else
-            emit "Gradle log" "bytes=$(wc -c < "$LOG") lines=$(wc -l < "$LOG")"
+            TOTAL=$(wc -l < "$LOG")
+            emit "Gradle log" "bytes=$(wc -c < "$LOG") lines=$TOTAL"
             if [ ! -s "$LOG" ]; then
               emit "Gradle log empty" "Gradle wrote nothing to stdout or stderr."
             fi
-            tail -n 15 "$LOG" | while IFS= read -r line; do
-              emit "Gradle failure" "$line"
-            done
+            # Anchored on the last "FAILURE:" rather than a fixed tail. Gradle
+            # prints FAILURE:, then "* What went wrong:", then the failing task,
+            # then the exception, and only then -- with --stacktrace -- the stack
+            # frames. That trace runs to tens of lines, so tail -n 15 captured the
+            # frames and the "BUILD FAILED" summary while pushing the task name
+            # out of the window. The task name is the whole answer, so start at
+            # the banner and read forward.
+            START=$(grep -n "FAILURE: Build failed" "$LOG" | tail -1 | cut -d: -f1)
+            if [ -n "$START" ]; then
+              FROM=$(( START > 3 ? START - 3 : 1 ))
+              emit "Failure banner" "line $START of $TOTAL"
+              sed -n "${FROM},${TOTAL}p" "$LOG" | head -n 45 | while IFS= read -r line; do
+                emit "Gradle failure" "$line"
+              done
+            else
+              emit "No failure banner" "No 'FAILURE: Build failed' line in the log; emitting the tail instead."
+              tail -n 45 "$LOG" | while IFS= read -r line; do
+                emit "Gradle failure" "$line"
+              done
+            fi
           fi
           # A 4-ABI new-architecture build is large enough to hit the runner's
           # disk or memory ceiling, and neither produces a Gradle failure banner.
