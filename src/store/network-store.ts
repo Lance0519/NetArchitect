@@ -29,10 +29,10 @@
  * values so the screen shows what was saved. When saving, we resolve the
  * draft's text to the values that go in the database.
  *
- * This means a half-typed CIDR is saved as whatever it resolves to *now* -
- * which is exactly what the user would expect, because the save button is
- * enabled only when `outcome.kind === 'ready'`, and a ready plan has no
- * half-typed fields.
+ * This means a half-typed CIDR is saved as whatever it resolves to *now*. `selectCanSave`
+ * deliberately does not gate on `outcome.kind === 'ready'` - the findings panel is for
+ * reporting a plan you save and come back to - so a half-typed field can genuinely reach
+ * the database, and this lossy resolution is what it resolves to.
  */
 import { create } from 'zustand';
 
@@ -134,6 +134,14 @@ export interface NetworkActions {
   saveCurrentPlan: () => NetworkPlan;
   /** Update an existing plan with the current planner draft. */
   updateCurrentPlan: (id: string) => NetworkPlan;
+  /**
+   * Save the draft, updating the open plan if there is one.
+   *
+   * The create-or-update decision lives here rather than in the screen so the rule is
+   * testable: a screen-level ternary would only be reachable by rendering, and this suite
+   * runs in plain Node.
+   */
+  save: () => NetworkPlan;
   /** Clear the planner store to a blank draft. */
   newPlan: () => void;
   /** Duplicate a plan and load the copy. */
@@ -148,54 +156,67 @@ export interface NetworkActions {
 
 export type NetworkStore = NetworkActions;
 
+/** Write the planner draft to the repository as a brand new plan. */
+const writeNewPlan = (): NetworkPlan => {
+  const plan = draftToPlan(usePlanStore.getState().draft);
+  savePlan(plan);
+  return plan;
+};
+
+/** Write the planner draft over an existing plan, keeping that plan's identity and birth. */
+const writeOverPlan = (id: string): NetworkPlan => {
+  const existing = getPlan(id);
+  if (existing === null) throw new Error(`Plan ${id} not found`);
+  const plan: NetworkPlan = {
+    ...draftToPlan(usePlanStore.getState().draft),
+    id: existing.id,
+    createdAt: existing.createdAt,
+    updatedAt: Date.now(),
+  };
+  savePlan(plan);
+  return plan;
+};
+
 export const useNetworkStore = create<NetworkStore>()((_set, _get) => ({
   loadPlan: (id) => {
     const plan = getPlan(id);
     if (plan === null) return null;
-    usePlanStore.setState({ draft: planToDraft(plan), pending: null });
+    usePlanStore.setState({ draft: planToDraft(plan), pending: null, currentPlanId: plan.id });
     return plan;
   },
 
-  saveCurrentPlan: () => {
-    const draft = usePlanStore.getState().draft;
-    const plan = draftToPlan(draft);
-    savePlan(plan);
-    return plan;
-  },
+  saveCurrentPlan: writeNewPlan,
 
-  updateCurrentPlan: (id) => {
-    const draft = usePlanStore.getState().draft;
-    const existing = getPlan(id);
-    if (existing === null) throw new Error(`Plan ${id} not found`);
-    const plan: NetworkPlan = {
-      ...draftToPlan(draft),
-      id: existing.id,
-      createdAt: existing.createdAt,
-      updatedAt: Date.now(),
-    };
-    savePlan(plan);
+  updateCurrentPlan: writeOverPlan,
+
+  save: () => {
+    const id = usePlanStore.getState().currentPlanId;
+    // A plan deleted from /plans while its draft was open leaves the id naming nothing, and
+    // `writeOverPlan` throws on a missing plan. Create instead: the user pressed Save on a
+    // real draft, and dropping it over a stale id would be the worse failure.
+    const plan = id !== null && getPlan(id) !== null ? writeOverPlan(id) : writeNewPlan();
+    usePlanStore.setState({ currentPlanId: plan.id });
     return plan;
   },
 
   newPlan: () => {
-    usePlanStore.setState({ draft: freshDraft(), pending: null });
+    usePlanStore.setState({ draft: freshDraft(), pending: null, currentPlanId: null });
   },
 
   duplicateAndLoad: (id, newName) => {
     const copy = duplicatePlan(id, newName);
     if (copy === null) return null;
-    usePlanStore.setState({ draft: planToDraft(copy), pending: null });
+    usePlanStore.setState({ draft: planToDraft(copy), pending: null, currentPlanId: copy.id });
     return copy;
   },
 
   deletePlan: (id) => {
     deletePlan(id);
-    // If we deleted the currently loaded plan, clear the editor.
-    // The planner store has no concept of "loaded plan ID", so we just
-    // check whether the current draft matches the deleted one.
-    const draft = usePlanStore.getState().draft;
-    if (draft.name !== '' || draft.parent !== '' || draft.rows.some((r) => r.name !== '')) {
-      // There's content - don't auto-clear. The user can hit New Plan.
+    // The id is the only record of which plan the editor holds, so dropping it here is what
+    // stops the next Save from writing over a row that no longer exists. The draft itself is
+    // left alone: it is the user's unsaved work, and clearing it would discard it silently.
+    if (usePlanStore.getState().currentPlanId === id) {
+      usePlanStore.setState({ currentPlanId: null });
     }
   },
 

@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
-import { CircleDashed, LayoutTemplate, RefreshCw, Trash2 } from 'lucide-react-native';
+import { CircleDashed, LayoutTemplate, RefreshCw, Save, Trash2 } from 'lucide-react-native';
 
 import {
   AppText,
@@ -33,7 +33,8 @@ import {
 import { evaluatePlan, type PlannerOutcome } from '@/core/planner-input';
 import { SELECTABLE_PROFILES, profileById, type ProfileDefinition } from '@/core/profiles';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { usePlanStore } from '@/store/plan-store';
+import { usePlanStore, selectCanSave } from '@/store/plan-store';
+import { useNetworkStore } from '@/store/network-store';
 import { useVlsmStore } from '@/store/vlsm-store';
 import { buildPlanView, unassignedFindings } from '@/utils/planner-view';
 
@@ -58,6 +59,10 @@ export default function PlannerScreen() {
   const commitChange = usePlanStore((state) => state.commitChange);
   const discardChange = usePlanStore((state) => state.discardChange);
   const reset = usePlanStore((state) => state.reset);
+  const currentPlanId = usePlanStore((state) => state.currentPlanId);
+  const canSave = usePlanStore(selectCanSave);
+
+  const save = useNetworkStore((state) => state.save);
 
   const consumeHandoff = useVlsmStore((state) => state.consumeHandoff);
 
@@ -124,6 +129,13 @@ export default function PlannerScreen() {
     setOperationError(null);
     reset();
   }, [reset]);
+  const handleSave = useCallback(() => {
+    setOperationError(null);
+    save();
+    // No confirmation snackbar: the footer is pinned, and its label flipping from "Save
+    // plan" to "Update plan" is the confirmation - it says what was written, and it keeps
+    // saying it for as long as the editor holds that plan.
+  }, [save]);
 
   return (
     <Screen
@@ -131,6 +143,17 @@ export default function PlannerScreen() {
       subtitle="Build a plan from a site and its needs."
       back={false}
       scroll
+      footer={
+        <Button
+          variant="primary"
+          block
+          disabled={!canSave}
+          icon={<Save size={16} strokeWidth={2} />}
+          onPress={handleSave}
+        >
+          {currentPlanId === null ? 'Save plan' : 'Update plan'}
+        </Button>
+      }
     >
       <View className="gap-4">
         {/* Plan Header */}
@@ -285,10 +308,6 @@ export default function PlannerScreen() {
           >
             Clear the plan
           </Button>
-          <AppText variant="caption" tone="faint">
-            Saving arrives with the local database in the next phase. Nothing here is written
-            to disk yet.
-          </AppText>
         </Card>
 
         <AppText variant="caption" tone="faint" className="text-center py-2">

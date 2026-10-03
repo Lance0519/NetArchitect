@@ -598,14 +598,16 @@ describe('the staging lifecycle', () => {
 describe('what the store must not hold', () => {
   beforeEach(resetStore);
 
-  it('holds the draft and the pending change, and nothing else', () => {
+  it('holds the draft, the pending change and the saved plan id, and nothing else', () => {
     // Named explicitly rather than checked with `Object.keys`, so a new field is a
-    // decision someone has to make here.
+    // decision someone has to make here. `currentPlanId` is source state rather than a
+    // derived value: `loadPlan`/`deletePlan` write it and `save` reads it, and nothing ever
+    // computes it from the draft - which is the rule the three tests below defend.
     const state = usePlanStore.getState() as unknown as Record<string, unknown>;
     const dataFields = Object.keys(state).filter(
       (key) => typeof state[key] !== 'function',
     );
-    expect(new Set(dataFields)).toEqual(new Set(['draft', 'pending']));
+    expect(new Set(dataFields)).toEqual(new Set(['draft', 'pending', 'currentPlanId']));
   });
 
   it('holds no evaluated outcome', () => {

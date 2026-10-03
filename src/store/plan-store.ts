@@ -131,11 +131,22 @@ export interface PlanActions {
 export type PlanStore = {
   readonly draft: PlanDraft;
   readonly pending: PendingChange | null;
+  /**
+   * The saved plan this draft came from, or `null` when it has never been one.
+   *
+   * Without it there is no way to tell a first save from a second: `saveCurrentPlan` mints a
+   * fresh id every call, and `planToDraft` drops the id on the way in, so pressing Save twice
+   * on one plan would leave two near-identical plans in the list. It lives here rather than in
+   * the screen because the draft *is* the thing that plan produced - a `useState` on the
+   * planner would forget the id on remount and duplicate the plan on the next save.
+   */
+  readonly currentPlanId: string | null;
 } & PlanActions;
 
 export const usePlanStore = create<PlanStore>()((set, get) => ({
   draft: initialPlanDraft(),
   pending: null,
+  currentPlanId: null,
 
   setName: (name) => set((state) => ({ draft: updateHeaderIn(state.draft, { name }) })),
   setDescription: (description) =>
@@ -167,12 +178,9 @@ export const usePlanStore = create<PlanStore>()((set, get) => ({
   reset: () => {
     // The pending change is cleared rather than left describing a draft that is about to
     // be replaced. Committing it afterwards would write a plan built from rows that no
-    // longer exist.
-    if (get().pending !== null) {
-      set({ draft: resetPlanDraft(), pending: null });
-      return;
-    }
-    set({ draft: resetPlanDraft() });
+    // longer exist. The plan id goes with it: the user threw this draft away, so the next
+    // Save has to write a new plan rather than overwrite the one this draft came from.
+    set({ draft: resetPlanDraft(), pending: null, currentPlanId: null });
   },
 
   stageRepack: () => {
@@ -289,6 +297,16 @@ export const selectRows = (state: PlanStore): readonly SubnetRowDraft[] => state
 
 /** Whether a change is waiting for the user. */
 export const selectHasPending = (state: PlanStore): boolean => state.pending !== null;
+
+/**
+ * Whether the draft holds anything worth writing to disk.
+ *
+ * Findings deliberately do not block it. `PlanFindingList` exists to report what is wrong with
+ * a plan the user is going to save anyway and come back to, and a button that greys out until
+ * every finding is resolved turns that panel into a wall. So this is the same `isUntouched` the
+ * reset guard uses, and nothing more: a blank draft is nothing to save, an imperfect one is.
+ */
+export const selectCanSave = (state: PlanStore): boolean => !isUntouched(state.draft);
 
 /** Create a fresh blank draft. Exported for tests and the network store. */
 export const freshDraft = (): PlanDraft => initialPlanDraft();
