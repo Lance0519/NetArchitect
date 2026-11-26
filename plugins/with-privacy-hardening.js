@@ -123,6 +123,11 @@ function blockPermissionInRelease(androidManifest, permission) {
 
 const withBlockedReleasePermissions = (config) =>
   withAndroidManifest(config, (androidManifestConfig) => {
+    androidManifestConfig.modResults.manifest.$ = {
+      'xmlns:tools': 'http://schemas.android.com/tools',
+      ...androidManifestConfig.modResults.manifest.$,
+    };
+
     for (const permission of BLOCKED_IN_RELEASE) {
       blockPermissionInRelease(androidManifestConfig.modResults, permission);
     }

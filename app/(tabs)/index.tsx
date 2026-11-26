@@ -8,7 +8,7 @@
  * - Recent network plans and quick actions
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Calculator,
@@ -23,32 +23,44 @@ import {
 } from 'lucide-react-native';
 import { Image, Pressable, View } from 'react-native';
 
-import { AppText, Card, Screen, StatusIndicator } from '@/components';
-import { NetworkStat } from '@/components/network';
-import { Button } from '@/components/ui/Button';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { SectionHeader } from '@/components/ui/SectionHeader';
+import {
+  AppText,
+  Button,
+  Card,
+  EmptyState,
+  NetworkStat,
+  Screen,
+  SectionHeader,
+  StatusIndicator,
+} from '@/components';
 import { auditPlan } from '@/core/security-auditor';
 import { useNetworkStore } from '@/store/network-store';
 import type { NetworkPlan } from '@/types/network';
 
 const QUICK_REFERENCE = [
-  { prefix: '/24', hosts: '254 hosts', mask: '255.255.255.0', use: 'Standard LAN' },
-  { prefix: '/26', hosts: '62 hosts', mask: '255.255.255.192', use: 'Branch Dept' },
-  { prefix: '/28', hosts: '14 hosts', mask: '255.255.255.240', use: 'Small Cluster' },
-  { prefix: '/30', hosts: '2 hosts', mask: '255.255.255.252', use: 'Point-to-Point' },
+  { prefix: '/24', hosts: '254 hosts', mask: '255.255.255.0', use: 'Standard LAN', exampleCidr: '192.168.1.0/24' },
+  { prefix: '/26', hosts: '62 hosts', mask: '255.255.255.192', use: 'Branch Dept', exampleCidr: '192.168.1.0/26' },
+  { prefix: '/28', hosts: '14 hosts', mask: '255.255.255.240', use: 'Small Cluster', exampleCidr: '192.168.1.0/28' },
+  { prefix: '/31', hosts: '2 hosts (RFC 3021)', mask: '255.255.255.254', use: 'Point-to-Point', exampleCidr: '10.0.0.0/31' },
 ] as const;
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { listPlans } = useNetworkStore();
-  const [allPlans, setAllPlans] = useState<readonly NetworkPlan[]>(() => listPlans());
+  const listPlans = useNetworkStore((s) => s.listPlans);
+  const revision = useNetworkStore((s) => s.revision);
+  const [focusTick, setFocusTick] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
-      setAllPlans(listPlans());
-    }, [listPlans]),
+      setFocusTick((t) => t + 1);
+    }, []),
   );
+
+  const allPlans = useMemo<readonly NetworkPlan[]>(() => {
+    void revision;
+    void focusTick;
+    return listPlans();
+  }, [listPlans, revision, focusTick]);
 
   const recentPlans = allPlans.slice(0, 3);
   const activePlan = recentPlans[0] ?? null;
@@ -210,7 +222,12 @@ export default function HomeScreen() {
                 key={ref.prefix}
                 accessibilityRole="button"
                 accessibilityLabel={`${ref.prefix} - ${ref.hosts} - ${ref.mask}`}
-                onPress={() => router.push('/(tabs)/calculator')}
+                onPress={() =>
+                  router.push({
+                    pathname: '/(tabs)/calculator',
+                    params: { cidr: ref.exampleCidr },
+                  } as any)
+                }
                 className="flex-row min-h-touch items-center justify-between rounded-control border border-line-subtle bg-surface-raised px-3 py-2 active:bg-surface"
               >
                 <View className="flex-row items-center gap-3">

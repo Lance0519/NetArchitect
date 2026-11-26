@@ -24,7 +24,7 @@ import {
   parseCidr,
   parseIPv4,
 } from './ip-engine';
-import { BROADCAST_DOMAIN, RESERVED_BLOCKS, STANDARD_REFS, VLAN } from './standards';
+import { BROADCAST_DOMAIN, CLASSIFICATION_BY_KIND, STANDARD_REFS, VLAN } from './standards';
 import { ROLE_DEFINITION_BY_ROLE } from './roles';
 
 /* ------------------------------------------------------------------ *
@@ -394,29 +394,43 @@ function checkVlanIdRange(plan: NetworkPlan): SecurityIssue[] {
   return issues;
 }
 
-/** SEC-007: Guest shares a subnet with a trusted LAN. */
+/** Helper: safe overlap test between two PlannedSubnets. */
+function subnetsOverlap(a: PlannedSubnet, b: PlannedSubnet): boolean {
+  try {
+    return detectOverlap(parseCidr(a.cidr), parseCidr(b.cidr));
+  } catch {
+    return false;
+  }
+}
+
+/** SEC-007: Guest shares a VLAN or address space with a trusted network. */
 function checkGuestIsolation(plan: NetworkPlan): SecurityIssue[] {
   const issues: SecurityIssue[] = [];
   const guestSubnets = plan.subnets.filter((s) => s.role === 'GUEST');
   const trustedSubnets = plan.subnets.filter(
-    (s) => s.role === 'LAN' || s.role === 'SERVERS' || s.role === 'MANAGEMENT',
+    (s) => s.role === 'LAN' || s.role === 'SERVERS' || s.role === 'MANAGEMENT' || s.role === 'VOIP',
   );
 
   for (const guest of guestSubnets) {
     for (const trusted of trustedSubnets) {
       if (guest.id === trusted.id) continue;
-      // Same VLAN means same broadcast domain.
-      if (guest.vlanId !== undefined && guest.vlanId === trusted.vlanId) {
+      const sharedVlan = guest.vlanId !== undefined && guest.vlanId === trusted.vlanId;
+      const overlappingCidr = subnetsOverlap(guest, trusted);
+
+      if (sharedVlan || overlappingCidr) {
+        const reason = sharedVlan
+          ? `shares VLAN ${guest.vlanId} with ${trusted.name}`
+          : `overlaps address space with ${trusted.name} (${trusted.cidr})`;
         issues.push(
           createIssue({
             ruleId: 'SEC-007',
             severity: 'high',
             title: 'Guest shares a subnet with a trusted LAN',
-            problem: `Guest subnet ${guest.name} shares VLAN ${guest.vlanId} with ${trusted.name}.`,
+            problem: `Guest subnet ${guest.name} ${reason}.`,
             whyItMatters:
-              'Guest traffic should reach the internet and nothing else. Sharing a broadcast domain with trusted networks allows lateral movement from compromised guest devices.',
+              'Guest traffic should reach the internet and nothing else. Sharing a broadcast domain or address block with trusted networks allows lateral movement from compromised guest devices.',
             remediation:
-              'Move the guest network to its own VLAN and subnet. Add a deny-any internal rule on the guest gateway.',
+              'Move the guest network to its own VLAN and non-overlapping subnet. Add a deny-any internal rule on the guest gateway.',
             citation: STANDARD_REFS.NIST800207,
             affectedSubnetIds: [guest.id, trusted.id],
           }),
@@ -428,28 +442,41 @@ function checkGuestIsolation(plan: NetworkPlan): SecurityIssue[] {
   return issues;
 }
 
-/** SEC-008: IoT not segmented from LAN/Guest. */
+/** SEC-008: IoT not segmented from LAN/Guest/Internal networks. */
 function checkIotSegmentation(plan: NetworkPlan): SecurityIssue[] {
   const issues: SecurityIssue[] = [];
   const iotSubnets = plan.subnets.filter((s) => s.role === 'IOT');
-  const userSubnets = plan.subnets.filter((s) => s.role === 'LAN' || s.role === 'GUEST');
+  const otherSubnets = plan.subnets.filter(
+    (s) =>
+      s.role === 'LAN' ||
+      s.role === 'GUEST' ||
+      s.role === 'SERVERS' ||
+      s.role === 'MANAGEMENT' ||
+      s.role === 'VOIP',
+  );
 
   for (const iot of iotSubnets) {
-    for (const user of userSubnets) {
-      if (iot.id === user.id) continue;
-      if (iot.vlanId !== undefined && iot.vlanId === user.vlanId) {
+    for (const other of otherSubnets) {
+      if (iot.id === other.id) continue;
+      const sharedVlan = iot.vlanId !== undefined && iot.vlanId === other.vlanId;
+      const overlappingCidr = subnetsOverlap(iot, other);
+
+      if (sharedVlan || overlappingCidr) {
+        const reason = sharedVlan
+          ? `shares VLAN ${iot.vlanId} with ${other.name}`
+          : `overlaps address space with ${other.name} (${other.cidr})`;
         issues.push(
           createIssue({
             ruleId: 'SEC-008',
             severity: 'high',
             title: 'IoT not segmented from LAN or Guest',
-            problem: `IoT subnet ${iot.name} shares VLAN ${iot.vlanId} with ${user.name}.`,
+            problem: `IoT subnet ${iot.name} ${reason}.`,
             whyItMatters:
-              'IoT devices are frequently unpatched and ship with default credentials. A compromised device on the same broadcast domain as user networks is a lateral-movement starting point.',
+              'IoT devices are frequently unpatched and ship with default credentials. A compromised device on the same broadcast domain or subnet as user networks is a lateral-movement starting point.',
             remediation:
-              'Place IoT devices on their own VLAN and subnet. Add firewall rules to prevent IoT-initiated traffic to user networks.',
+              'Place IoT devices on their own VLAN and non-overlapping subnet. Add firewall rules to prevent IoT-initiated traffic to internal networks.',
             citation: STANDARD_REFS.NIST800207,
-            affectedSubnetIds: [iot.id, user.id],
+            affectedSubnetIds: [iot.id, other.id],
           }),
         );
       }
@@ -501,7 +528,9 @@ function checkBroadcastDomainSize(plan: NetworkPlan): SecurityIssue[] {
     try {
       const cidr = parseCidr(subnet.cidr);
 
-      if (cidr.prefix <= BROADCAST_DOMAIN.MAX_PREFIX) {
+      // A /24 (254 usable hosts) is the conventional broadcast-domain ceiling.
+      // Only larger subnets (/23 and broader, i.e. prefix < 24) exceed it.
+      if (cidr.prefix < BROADCAST_DOMAIN.MAX_PREFIX) {
         const info = calculateSubnet(cidr.ip, cidr.prefix);
         issues.push(
           createIssue({
@@ -704,7 +733,7 @@ function checkMissingVlanId(plan: NetworkPlan): SecurityIssue[] {
   return issues;
 }
 
-/** SEC-015: Reserved space in use. */
+/** SEC-015: Special-purpose / reserved address space in use. */
 function checkReservedSpace(plan: NetworkPlan): SecurityIssue[] {
   const issues: SecurityIssue[] = [];
 
@@ -714,30 +743,22 @@ function checkReservedSpace(plan: NetworkPlan): SecurityIssue[] {
       const classification = classifyAddressSpace(cidr.ip);
 
       if (classification !== 'public' && classification !== 'private') {
-        const reservedKinds: readonly (keyof typeof RESERVED_BLOCKS)[] = [
-          'this_network',
-          'loopback',
-          'link_local',
-          'multicast',
-          'reserved',
-        ];
-
-        if (reservedKinds.includes(classification as keyof typeof RESERVED_BLOCKS)) {
-          issues.push(
-            createIssue({
-              ruleId: 'SEC-015',
-              severity: 'info',
-              title: 'Reserved address space in use',
-              problem: `${subnet.name} (${subnet.cidr}) is in reserved address space.`,
-              whyItMatters:
-                'Reserved address space has special meaning and may not be routable or assignable. Using it can cause unexpected behavior.',
-              remediation:
-                'Use RFC 1918 private address space (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) for internal networks.',
-              citation: STANDARD_REFS.RFC6890,
-              affectedSubnetIds: [subnet.id],
-            }),
-          );
-        }
+        const meta = CLASSIFICATION_BY_KIND[classification];
+        issues.push(
+          createIssue({
+            ruleId: 'SEC-015',
+            severity: 'info',
+            title: `${meta.label} address space in use`,
+            problem: `${subnet.name} (${subnet.cidr}) falls in ${meta.label} space (${meta.citation}).`,
+            whyItMatters:
+              meta.guidance ??
+              'Special-purpose address space has reserved semantics and may not be routable or assignable.',
+            remediation:
+              'Use RFC 1918 private address space (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) for internal networks.',
+            citation: meta.citation,
+            affectedSubnetIds: [subnet.id],
+          }),
+        );
       }
     } catch {
       // Invalid CIDR — skip.

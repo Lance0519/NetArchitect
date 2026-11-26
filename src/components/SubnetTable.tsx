@@ -57,6 +57,7 @@ import { ScrollView, View, useWindowDimensions } from 'react-native';
 
 import { AppText } from './AppText';
 import { CidrBadge } from './Badge';
+import { useUiStore } from '@/store/ui-store';
 import { cn } from '@/utils/cn';
 import {
   COLUMNS,
@@ -83,7 +84,13 @@ import type { VlsmTableRow } from '@/utils/vlsm-view';
  */
 const cellValue = (row: VlsmTableRow, key: ColumnKey): string => COLUMN_ACCESSOR[key](row);
 
-const DataCells = ({ row }: { row: VlsmTableRow }) => (
+const DataCells = ({
+  row,
+  cidrDisplayFormat,
+}: {
+  row: VlsmTableRow;
+  cidrDisplayFormat: 'full' | 'badge';
+}) => (
   <>
     {COLUMNS.map((column) => (
       <View
@@ -91,7 +98,7 @@ const DataCells = ({ row }: { row: VlsmTableRow }) => (
         style={{ width: column.width }}
         className={cn('justify-center px-2 py-2.5', column.align === 'right' && 'items-end')}
       >
-        {column.key === 'cidr' ? (
+        {column.key === 'cidr' && cidrDisplayFormat === 'badge' ? (
           <CidrBadge value={row.cidr} />
         ) : (
           <AppText
@@ -168,6 +175,7 @@ export interface SubnetTableProps {
 
 export function SubnetTable({ rows, className }: SubnetTableProps) {
   const { width } = useWindowDimensions();
+  const cidrDisplayFormat = useUiStore((s) => s.cidrDisplayFormat);
   const scrolls = !usesGridLayout(width);
 
   if (!scrolls) {
@@ -180,7 +188,7 @@ export function SubnetTable({ rows, className }: SubnetTableProps) {
         {rows.map((row, index) => (
           <View key={row.id} className={cn('flex-row border-b border-line', stripe(index))}>
             <NameCell row={row} />
-            <DataCells row={row} />
+            <DataCells row={row} cidrDisplayFormat={cidrDisplayFormat} />
           </View>
         ))}
       </View>
@@ -223,7 +231,7 @@ export function SubnetTable({ rows, className }: SubnetTableProps) {
                 key={row.id}
                 className={cn('flex-row border-b border-line', stripe(index))}
               >
-                <DataCells row={row} />
+                <DataCells row={row} cidrDisplayFormat={cidrDisplayFormat} />
               </View>
             ))}
           </View>

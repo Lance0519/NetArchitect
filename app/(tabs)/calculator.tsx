@@ -21,16 +21,18 @@ import { useLocalSearchParams } from 'expo-router';
 import {
   AppText,
   Banner,
+  Button,
   Card,
   CidrInput,
   IpResultCard,
   Screen,
   SegmentedControl,
+  showSnackbar,
 } from '@/components';
-import { Button } from '@/components/ui/Button';
 import { RouteSummarizerView } from '@/components/tools/RouteSummarizerView';
 import { SubnetSplitterView } from '@/components/tools/SubnetSplitterView';
 import { evaluateCombined, type CalculatorOutcome } from '@/core/calculator-input';
+import { useUiStore } from '@/store/ui-store';
 import { classifyCalculatorOutcome } from '@/utils/subnet-view';
 
 type ToolMode = 'calculator' | 'summarizer' | 'splitter';
@@ -60,18 +62,56 @@ const INITIAL_OUTCOME: CalculatorOutcome = evaluateCombined('');
 const ACKNOWLEDGE_MS = 2200;
 
 export default function CalculatorScreen() {
-  const searchParams = useLocalSearchParams<{ tool?: string }>();
-  const [userTool, setUserTool] = useState<ToolMode | null>(null);
+  const searchParams = useLocalSearchParams<{ tool?: string; cidr?: string }>();
+  const defaultAdvanced = useUiStore((s) => s.showAdvancedFields);
+  const [userToolState, setUserToolState] = useState<{
+    readonly paramCidr: string | undefined;
+    readonly mode: ToolMode | null;
+  }>({ paramCidr: searchParams.cidr, mode: null });
 
   const toolMode: ToolMode =
-    userTool ??
-    (searchParams.tool === 'summarizer' || searchParams.tool === 'splitter'
-      ? searchParams.tool
-      : 'calculator');
+    userToolState.paramCidr === searchParams.cidr && userToolState.mode !== null
+      ? userToolState.mode
+      : searchParams.cidr
+        ? 'calculator'
+        : searchParams.tool === 'summarizer' || searchParams.tool === 'splitter'
+          ? searchParams.tool
+          : 'calculator';
+
+  const setUserTool = useCallback(
+    (mode: ToolMode) => {
+      setUserToolState({ paramCidr: searchParams.cidr, mode });
+    },
+    [searchParams.cidr],
+  );
 
   const [outcome, setOutcome] = useState<CalculatorOutcome>(INITIAL_OUTCOME);
   const [copiedLabel, setCopiedLabel] = useState<string | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [advancedState, setAdvancedState] = useState<{
+    readonly base: boolean;
+    readonly value: boolean;
+  }>({ base: defaultAdvanced, value: defaultAdvanced });
+  const showAdvanced =
+    advancedState.base === defaultAdvanced ? advancedState.value : defaultAdvanced;
+  const toggleAdvanced = useCallback(() => {
+    setAdvancedState((prev) => {
+      const current = prev.base === defaultAdvanced ? prev.value : defaultAdvanced;
+      return { base: defaultAdvanced, value: !current };
+    });
+  }, [defaultAdvanced]);
+
+  const [cidrState, setCidrState] = useState<{
+    readonly param: string | undefined;
+    readonly value: string;
+  }>({ param: searchParams.cidr, value: searchParams.cidr ?? '' });
+  const inputCidr =
+    cidrState.param === searchParams.cidr ? cidrState.value : (searchParams.cidr ?? '');
+  const setInputCidr = useCallback(
+    (next: string) => {
+      setCidrState({ param: searchParams.cidr, value: next });
+    },
+    [searchParams.cidr],
+  );
 
   const state = useMemo(() => classifyCalculatorOutcome(outcome), [outcome]);
 
@@ -85,6 +125,7 @@ export default function CalculatorScreen() {
 
   const acknowledge = useCallback((label: string) => {
     setCopiedLabel(label);
+    showSnackbar(`Copied ${label} to clipboard`);
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       setCopiedLabel(null);
@@ -106,8 +147,6 @@ export default function CalculatorScreen() {
     },
     [acknowledge],
   );
-
-  const [inputCidr, setInputCidr] = useState('');
 
   const meta = TOOL_METADATA[toolMode];
 
@@ -181,18 +220,21 @@ export default function CalculatorScreen() {
 
         {state.kind === 'ok' ? (
           <>
-            <IpResultCard view={state.view} onCopy={handleCopy} />
+            <IpResultCard view={state.view} onCopy={handleCopy} showDetails={showAdvanced} />
 
-            {/* Advanced Details Toggle */}
+            {/* Advanced Details Toggle (controls IpResultCard secondary rows without duplicating them) */}
             <Card padding="none">
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={showAdvanced ? 'Hide advanced details' : 'Show advanced details'}
-                onPress={() => setShowAdvanced(!showAdvanced)}
-                className="flex-row items-center justify-between px-4 py-3 active:bg-surface-raised"
+                accessibilityState={{ expanded: showAdvanced }}
+                accessibilityLabel={
+                  showAdvanced ? 'Hide advanced mask and binary details' : 'Show advanced mask and binary details'
+                }
+                onPress={toggleAdvanced}
+                className="min-h-touch flex-row items-center justify-between px-4 py-3 active:bg-surface-raised"
               >
                 <AppText variant="label" tone="muted">
-                  MORE DETAILS
+                  {showAdvanced ? 'HIDE ADVANCED DETAILS' : 'SHOW ADVANCED DETAILS (MASKS & BINARY)'}
                 </AppText>
                 {showAdvanced ? (
                   <ChevronUp size={18} strokeWidth={2} className="text-ink-muted" />
@@ -200,23 +242,6 @@ export default function CalculatorScreen() {
                   <ChevronDown size={18} strokeWidth={2} className="text-ink-muted" />
                 )}
               </Pressable>
-
-              {showAdvanced ? (
-                <View className="border-t border-line-subtle px-4 py-3">
-                  <View className="gap-2">
-                    {state.view.detail.map((row) => (
-                      <View key={row.label} className="flex-row items-center justify-between">
-                        <AppText variant="caption" tone="muted">
-                          {row.label}
-                        </AppText>
-                        <AppText variant="caption" tone="primary" mono>
-                          {row.value}
-                        </AppText>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              ) : null}
             </Card>
 
             <Card padding="lg">

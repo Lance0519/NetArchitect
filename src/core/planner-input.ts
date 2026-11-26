@@ -506,6 +506,7 @@ export const evaluatePlan = (draft: PlanDraft): PlannerOutcome => {
       ...(vlan.success ? { vlanId: vlan.data } : {}),
       cidr: formatCidr({ family: 'ipv4', ip: subnet.networkAddress, prefix: subnet.cidr.prefix }),
       ...(gateway === null ? {} : { gateway }),
+      gatewayMode: row.gatewayMode,
       requestedHosts: Number(row.hosts.trim()),
       sortOrder: index,
     };
@@ -610,7 +611,7 @@ const parseParentMessage = (text: string): string => {
  * light up the table before the user had done anything - and the message would be "name
  * this subnet", which is not a complaint about anything they did.
  */
-const isBlankRow = (row: SubnetRowDraft): boolean =>
+export const isBlankRow = (row: SubnetRowDraft): boolean =>
   row.name.trim().length === 0 &&
   row.cidr.trim().length === 0 &&
   row.hosts.trim().length === 0 &&
@@ -761,12 +762,13 @@ const planFindings = (
  * Do two resolved subnets share an address?
  *
  * Integer comparison on the inclusive ranges, which is exact and needs no floating point
- * and no exponent: `aStart < bEnd && bStart < aEnd`. For a `/31` and a `/32` inside it,
- * the containment case still reports true, which is correct - two rows claiming the same
- * address are overlapping however one of them got there.
+ * and no exponent: `aStart <= bEnd && bStart <= aEnd`. Using `<=` is essential for `/32`
+ * host routes where `networkAddress === broadcastAddress`: two identical `/32` subnets or
+ * a `/32` placed on a subnet's network/broadcast boundary must still be flagged as an
+ * overlap.
  */
 const rangesOverlap = (a: SubnetInfo, b: SubnetInfo): boolean =>
-  a.networkAddress < b.broadcastAddress && b.networkAddress < a.broadcastAddress;
+  a.networkAddress <= b.broadcastAddress && b.networkAddress <= a.broadcastAddress;
 
 /* ------------------------------------------------------------------ *
  * Small helpers

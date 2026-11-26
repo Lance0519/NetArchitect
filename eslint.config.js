@@ -28,6 +28,8 @@ module.exports = [
       /* Output of `expo export`. A build artifact, not source. */
       ".export-probe/**",
       ".export-probe-web/**",
+      /* Local developer agent tooling, not shipped app source. */
+      ".opencode/**",
     ],
   },
 

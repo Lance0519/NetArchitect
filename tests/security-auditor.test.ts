@@ -361,11 +361,23 @@ describe('SEC-007: Guest isolation', () => {
     expect(sec007[0]?.severity).toBe('high');
   });
 
-  it('does not flag guest on separate VLAN', () => {
+  it('detects guest overlapping address space with LAN even without shared VLAN', () => {
     const plan = makePlan({
       subnets: [
-        makeSubnet({ id: 'guest', name: 'Guest', role: 'GUEST', vlanId: 10 }),
-        makeSubnet({ id: 'lan', name: 'LAN', role: 'LAN', vlanId: 20 }),
+        makeSubnet({ id: 'guest', name: 'Guest', role: 'GUEST', cidr: '192.168.1.0/25', vlanId: 10 }),
+        makeSubnet({ id: 'lan', name: 'LAN', role: 'LAN', cidr: '192.168.1.0/24', vlanId: 20 }),
+      ],
+    });
+    const issues = auditPlan(plan);
+    const sec007 = issues.filter((i) => i.ruleId === 'SEC-007');
+    expect(sec007).toHaveLength(1);
+  });
+
+  it('does not flag guest on separate VLAN and non-overlapping CIDR', () => {
+    const plan = makePlan({
+      subnets: [
+        makeSubnet({ id: 'guest', name: 'Guest', role: 'GUEST', cidr: '192.168.1.0/25', vlanId: 10 }),
+        makeSubnet({ id: 'lan', name: 'LAN', role: 'LAN', cidr: '192.168.1.128/25', vlanId: 20 }),
       ],
     });
     const issues = auditPlan(plan);
@@ -392,11 +404,23 @@ describe('SEC-008: IoT segmentation', () => {
     expect(sec008[0]?.severity).toBe('high');
   });
 
-  it('does not flag IoT on separate VLAN', () => {
+  it('detects IoT overlapping address space with LAN even on separate VLANs', () => {
     const plan = makePlan({
       subnets: [
-        makeSubnet({ id: 'iot', name: 'IoT', role: 'IOT', vlanId: 10 }),
-        makeSubnet({ id: 'lan', name: 'LAN', role: 'LAN', vlanId: 20 }),
+        makeSubnet({ id: 'iot', name: 'IoT', role: 'IOT', cidr: '192.168.1.0/25', vlanId: 10 }),
+        makeSubnet({ id: 'lan', name: 'LAN', role: 'LAN', cidr: '192.168.1.0/24', vlanId: 20 }),
+      ],
+    });
+    const issues = auditPlan(plan);
+    const sec008 = issues.filter((i) => i.ruleId === 'SEC-008');
+    expect(sec008).toHaveLength(1);
+  });
+
+  it('does not flag IoT on separate VLAN and non-overlapping CIDR', () => {
+    const plan = makePlan({
+      subnets: [
+        makeSubnet({ id: 'iot', name: 'IoT', role: 'IOT', cidr: '192.168.1.0/25', vlanId: 10 }),
+        makeSubnet({ id: 'lan', name: 'LAN', role: 'LAN', cidr: '192.168.1.128/25', vlanId: 20 }),
       ],
     });
     const issues = auditPlan(plan);
@@ -439,14 +463,23 @@ describe('SEC-009: Management subnet size', () => {
  * ------------------------------------------------------------------ */
 
 describe('SEC-010: Broadcast domain size', () => {
-  it('detects /24 broadcast domain', () => {
+  it('detects /23 and larger broadcast domains', () => {
     const plan = makePlan({
-      subnets: [makeSubnet({ cidr: '192.168.1.0/24' })],
+      subnets: [makeSubnet({ cidr: '192.168.0.0/23' })],
     });
     const issues = auditPlan(plan);
     const sec010 = issues.filter((i) => i.ruleId === 'SEC-010');
     expect(sec010).toHaveLength(1);
     expect(sec010[0]?.severity).toBe('medium');
+  });
+
+  it('does not flag /24 (the conventional broadcast-domain ceiling)', () => {
+    const plan = makePlan({
+      subnets: [makeSubnet({ cidr: '192.168.1.0/24' })],
+    });
+    const issues = auditPlan(plan);
+    const sec010 = issues.filter((i) => i.ruleId === 'SEC-010');
+    expect(sec010).toHaveLength(0);
   });
 
   it('does not flag /25 or smaller', () => {
@@ -618,6 +651,22 @@ describe('SEC-015: Reserved space', () => {
     expect(sec015[0]?.severity).toBe('info');
   });
 
+  it('detects CGNAT, documentation (TEST-NET), and benchmarking ranges with specific citations', () => {
+    const plan = makePlan({
+      subnets: [
+        makeSubnet({ id: 'cgnat', cidr: '100.64.0.0/24' }),
+        makeSubnet({ id: 'docs', cidr: '192.0.2.0/24' }),
+        makeSubnet({ id: 'bench', cidr: '198.18.0.0/24' }),
+        makeSubnet({ id: 'ietf', cidr: '192.0.0.0/24' }),
+      ],
+    });
+    const issues = auditPlan(plan).filter((i) => i.ruleId === 'SEC-015');
+    expect(issues).toHaveLength(4);
+    expect(issues.map((i) => i.citation)).toEqual(
+      expect.arrayContaining(['RFC 6598', 'RFC 5737', 'RFC 2544', 'RFC 6890']),
+    );
+  });
+
   it('does not flag RFC 1918 space', () => {
     const plan = makePlan({
       subnets: [makeSubnet({ cidr: '192.168.1.0/24' })],
@@ -767,8 +816,8 @@ describe('rule coverage', () => {
         makeSubnet({ id: 'l', role: 'LAN', vlanId: 30 }),
         // SEC-009: Mgmt oversized
         makeSubnet({ id: 'm', role: 'MANAGEMENT', cidr: '10.0.4.0/24' }),
-        // SEC-010: Broadcast domain
-        makeSubnet({ id: 'n', cidr: '10.0.5.0/24' }),
+        // SEC-010: Broadcast domain (/23 exceeds /24 ceiling)
+        makeSubnet({ id: 'n', cidr: '10.0.4.0/23' }),
         // SEC-011: Outside parent
         makeSubnet({ id: 'o', cidr: '192.168.0.0/16' }),
         // SEC-012: Poor utilization

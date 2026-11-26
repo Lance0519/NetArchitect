@@ -1,22 +1,19 @@
 /**
- * NetworkStat - a compact statistic display.
- *
- * Used for dashboard cards showing counts, percentages, etc.
- * Label on top, value below, optional detail text.
+ * NetworkStat - compact label + value + optional detail metric block.
  */
 
 import { View } from 'react-native';
 
-import { AppText } from '../AppText';
+import { AppText } from './AppText';
 import { cn } from '@/utils/cn';
 
 export interface NetworkStatProps {
-  label: string;
-  value: string;
-  detail?: string;
-  tone?: 'default' | 'accent' | 'success' | 'medium' | 'critical';
-  mono?: boolean;
-  className?: string;
+  readonly label: string;
+  readonly value: string;
+  readonly detail?: string | undefined;
+  readonly tone?: 'default' | 'accent' | 'success' | 'medium' | 'critical' | undefined;
+  readonly mono?: boolean | undefined;
+  readonly className?: string | undefined;
 }
 
 const TONE_CLASS = {
@@ -40,7 +37,12 @@ export function NetworkStat({
       <AppText variant="caption" tone="faint">
         {label}
       </AppText>
-      <AppText variant="title" tone={tone === 'default' ? 'primary' : tone} mono={mono} className={TONE_CLASS[tone]}>
+      <AppText
+        variant="title"
+        tone={tone === 'default' ? 'primary' : tone}
+        mono={mono}
+        className={TONE_CLASS[tone]}
+      >
         {value}
       </AppText>
       {detail ? (

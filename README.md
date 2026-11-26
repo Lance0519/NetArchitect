@@ -13,12 +13,13 @@ NetArchitect is an offline-first mobile and web application built for network en
 - **VLSM Tree Allocator:** Automatically solves optimal subnet allocations for arbitrary host requirements using power-of-two prefix fitting and binary buddy merging/splitting.
 - **Per-Subnet Host Allocation:** Generates deterministic IP allocations for gateways, static infrastructure blocks, and dynamic DHCP pools.
 - **Static Security Auditor:** Performs offline security audits on network designs to flag unsegmented VLANs, overlapping subnets, public address leakage, perimeter bogons (RFC 1918), and legacy /30 point-to-point waste (RFC 3021).
-- **Multi-Vendor Configuration Exporter:** Exports complete network plans into ready-to-deploy configurations for:
-  - **Cisco IOS** (Interface configurations, sub-interfaces, 802.1Q encapsulation)
-  - **MikroTik RouterOS** (`/ip address`, `/ip pool`, `/ip dhcp-server`)
+- **Multi-Vendor Configuration Exporter:** Exports complete network plans into syntax-commented, ready-to-review configuration templates for:
+  - **Cisco IOS** (Sub-interfaces, 802.1Q encapsulation, gateway addressing)
+  - **Linux iptables** (NIST SP 800-207 Zero Trust isolation baseline with `#!/bin/bash` header)
+  - **Linux Netplan YAML** (`networkd` v2 interface and VLAN definitions)
+  - **MikroTik RouterOS** (`/interface vlan`, `/ip address`, `/ip pool`, `/ip dhcp-server`)
   - **Terraform HCL** (`aws_vpc`, `aws_subnet`, `cidrsubnet` annotations)
-  - **Linux** (`/etc/network/interfaces` and Netplan YAML)
-  - **JSON & Markdown** tabular documentation
+  - **Markdown & JSON** structured documentation tables and portable plan snapshots
 - **Auxiliary Network Utilities:**
   - **Route Summarizer / Supernetting:** Aggregates multiple CIDR blocks into minimal supernets, reporting route efficiency and detecting unadvertised routing "holes".
   - **Binary Subnet Splitter:** Visual binary tree splitter allowing recursive division and buddy merging of IP blocks.
@@ -81,8 +82,8 @@ npm run ios
 NetArchitect enforces strict quality gates on every commit:
 
 ```bash
-# Run all unit tests (1,250+ tests)
-npm test
+# Run all unit tests with coverage threshold enforcement
+npm run test:coverage
 
 # Type checking with strict TypeScript compiler
 npm run typecheck
@@ -90,7 +91,7 @@ npm run typecheck
 # Code linting with ESLint
 npm run lint
 
-# Check class order and verify stylesheet compilation
+# Run all quality, architecture/privacy, class-order, and theme checks
 npm run check
 ```
 

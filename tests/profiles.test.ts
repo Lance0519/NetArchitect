@@ -432,21 +432,15 @@ describe('the enterprise profile', () => {
     expect(roles).toContain('POINT_TO_POINT');
   });
 
-  it('gives management a /27, which is the smallest block that holds its 25 hosts', () => {
-    // Management guidance talks about a /28, and a /28 has 14 usable addresses - fewer than
-    // the 25 this profile claims. So the hint and the convention disagree, and this test
-    // pins the arithmetic rather than the aspiration: 25 hosts needs 2^5 - 2 = 30 usable,
-    // which is exactly a /27. Asserting `usableHosts === 30` rather than "at most something"
-    // means that if the hint is ever changed, this test fails and says the hint moved -
-    // instead of continuing to pass against a ceiling nobody re-read.
+  it('gives management a /28, which holds its 12 hosts and meets the SEC-009 ceiling', () => {
     const result = packProfile(ENTERPRISE_PROFILE, '10.0.0.0/20');
     const mgmt = result.allocations.find((a) => a.role === 'MANAGEMENT');
     if (mgmt === undefined) throw new Error('expected a management allocation');
-    expect(mgmt.subnet.usableHosts).toBe(30);
-    expect(mgmt.subnet.networkBits).toBe(27);
+    expect(mgmt.subnet.usableHosts).toBe(14);
+    expect(mgmt.subnet.networkBits).toBe(28);
   });
 
-  it('keeps management among the smallest blocks, so it is worth locking down', () => {
+  it('keeps management strictly smaller than or equal to every non-P2P segment', () => {
     // The security argument for a small management segment is that it is worth locking
     // down, and that argument only holds while it IS small. DMZ and management both take 25
     // hosts and therefore both come out as a /27, so this asserts management is no larger

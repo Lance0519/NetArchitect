@@ -656,7 +656,8 @@ export const roundPercent = (value: number): number => Math.round(value * 100) /
 
 /**
  * Compute the recommended per-subnet host allocation plan.
- * Reserves gateway, static infrastructure, and dynamic DHCP pool.
+ * Reserves gateway, static infrastructure, and dynamic DHCP pool while
+ * strictly excluding the chosen gateway IP (whether first, last, or custom).
  */
 export function computeHostAllocation(
   cidrInput: string,
@@ -667,10 +668,24 @@ export function computeHostAllocation(
 
   const netStr = integerToIPv4(info.networkAddress);
 
+  let gwInt = info.firstUsableHost;
+  let gwStr = integerToIPv4(gwInt);
+  if (customGateway !== undefined && customGateway.trim().length > 0) {
+    try {
+      const parsedGw = parseIPv4(customGateway.trim());
+      gwStr = integerToIPv4(parsedGw);
+      if (parsedGw >= info.firstUsableHost && parsedGw <= info.lastUsableHost) {
+        gwInt = parsedGw;
+      }
+    } catch {
+      gwStr = customGateway.trim();
+    }
+  }
+
   if (info.isHostRoute) {
     return {
       networkAddress: netStr,
-      gateway: customGateway ?? netStr,
+      gateway: gwStr,
       staticRange: null,
       dhcpPool: null,
       broadcastAddress: null,
@@ -679,14 +694,15 @@ export function computeHostAllocation(
   }
 
   if (info.isPointToPoint) {
-    const host0 = integerToIPv4(info.firstUsableHost);
-    const host1 = integerToIPv4(info.lastUsableHost);
+    const peerInt =
+      gwInt === info.firstUsableHost ? info.lastUsableHost : info.firstUsableHost;
+    const peer = integerToIPv4(peerInt);
     return {
       networkAddress: netStr,
-      gateway: customGateway ?? host0,
+      gateway: gwStr,
       staticRange: {
-        start: host1,
-        end: host1,
+        start: peer,
+        end: peer,
         count: 1,
       },
       dhcpPool: null,
@@ -698,11 +714,12 @@ export function computeHostAllocation(
   const bcastStr = integerToIPv4(info.broadcastAddress);
 
   if (info.usableHosts <= 2) {
-    const gw = customGateway ?? integerToIPv4(info.firstUsableHost);
-    const peer = integerToIPv4(info.lastUsableHost);
+    const peerInt =
+      gwInt === info.firstUsableHost ? info.lastUsableHost : info.firstUsableHost;
+    const peer = integerToIPv4(peerInt);
     return {
       networkAddress: netStr,
-      gateway: gw,
+      gateway: gwStr,
       staticRange: {
         start: peer,
         end: peer,
@@ -714,34 +731,122 @@ export function computeHostAllocation(
     };
   }
 
-  const gw = customGateway ?? integerToIPv4(info.firstUsableHost);
   const usable = info.usableHosts;
-
-  // Reserve static infrastructure: e.g. .2 - .10 for /24, or up to 15% for smaller subnets
   const staticCount = Math.max(1, Math.min(9, Math.floor(usable * 0.15)));
-  const staticStart = (info.firstUsableHost + 1) >>> 0;
-  const staticEnd = (staticStart + staticCount - 1) >>> 0;
 
-  const dhcpStart = (staticEnd + 1) >>> 0;
-  const dhcpEnd = info.lastUsableHost;
-  const dhcpCount = dhcpEnd >= dhcpStart ? dhcpEnd - dhcpStart + 1 : 0;
+  // Split the usable address range around `gwInt` so the gateway is NEVER leased
+  // inside either `staticRange` or `dhcpPool`.
+  if (gwInt === info.lastUsableHost) {
+    // Gateway sits at the top (e.g. .254): reserve statics from the bottom (.1..),
+    // DHCP from after statics up to lastUsable - 1 (.253).
+    const staticStart = info.firstUsableHost;
+    const staticEnd = (staticStart + staticCount - 1) >>> 0;
+    const dhcpStart = (staticEnd + 1) >>> 0;
+    const dhcpEnd = (info.lastUsableHost - 1) >>> 0;
+    const dhcpCount = dhcpEnd >= dhcpStart ? dhcpEnd - dhcpStart + 1 : 0;
+
+    return {
+      networkAddress: netStr,
+      gateway: gwStr,
+      staticRange: {
+        start: integerToIPv4(staticStart),
+        end: integerToIPv4(staticEnd),
+        count: staticCount,
+      },
+      dhcpPool:
+        dhcpCount > 0
+          ? {
+              start: integerToIPv4(dhcpStart),
+              end: integerToIPv4(dhcpEnd),
+              count: dhcpCount,
+            }
+          : null,
+      broadcastAddress: bcastStr,
+      totalAssignable: usable,
+    };
+  }
+
+  if (gwInt === info.firstUsableHost) {
+    // Standard convention (gateway at .1): statics right after gateway, DHCP to .254.
+    const staticStart = (info.firstUsableHost + 1) >>> 0;
+    const staticEnd = (staticStart + staticCount - 1) >>> 0;
+    const dhcpStart = (staticEnd + 1) >>> 0;
+    const dhcpEnd = info.lastUsableHost;
+    const dhcpCount = dhcpEnd >= dhcpStart ? dhcpEnd - dhcpStart + 1 : 0;
+
+    return {
+      networkAddress: netStr,
+      gateway: gwStr,
+      staticRange: {
+        start: integerToIPv4(staticStart),
+        end: integerToIPv4(staticEnd),
+        count: staticCount,
+      },
+      dhcpPool:
+        dhcpCount > 0
+          ? {
+              start: integerToIPv4(dhcpStart),
+              end: integerToIPv4(dhcpEnd),
+              count: dhcpCount,
+            }
+          : null,
+      broadcastAddress: bcastStr,
+      totalAssignable: usable,
+    };
+  }
+
+  // Mid-range custom gateway: divide [firstUsable, gw-1] and [gw+1, lastUsable]
+  // and take the larger contiguous span for DHCP so `gwInt` is strictly excluded.
+  const lowerStart = info.firstUsableHost;
+  const lowerEnd = (gwInt - 1) >>> 0;
+  const lowerSize = lowerEnd >= lowerStart ? lowerEnd - lowerStart + 1 : 0;
+
+  const upperStart = (gwInt + 1) >>> 0;
+  const upperEnd = info.lastUsableHost;
+  const upperSize = upperEnd >= upperStart ? upperEnd - upperStart + 1 : 0;
+
+  let staticRange: HostAllocationPlan['staticRange'] = null;
+  let dhcpPool: HostAllocationPlan['dhcpPool'] = null;
+
+  if (upperSize >= lowerSize) {
+    const sCount = Math.min(staticCount, lowerSize);
+    if (sCount > 0) {
+      staticRange = {
+        start: integerToIPv4(lowerStart),
+        end: integerToIPv4((lowerStart + sCount - 1) >>> 0),
+        count: sCount,
+      };
+    }
+    if (upperSize > 0) {
+      dhcpPool = {
+        start: integerToIPv4(upperStart),
+        end: integerToIPv4(upperEnd),
+        count: upperSize,
+      };
+    }
+  } else {
+    const sCount = Math.min(staticCount, upperSize);
+    if (sCount > 0) {
+      staticRange = {
+        start: integerToIPv4(upperStart),
+        end: integerToIPv4((upperStart + sCount - 1) >>> 0),
+        count: sCount,
+      };
+    }
+    if (lowerSize > 0) {
+      dhcpPool = {
+        start: integerToIPv4(lowerStart),
+        end: integerToIPv4(lowerEnd),
+        count: lowerSize,
+      };
+    }
+  }
 
   return {
     networkAddress: netStr,
-    gateway: gw,
-    staticRange: {
-      start: integerToIPv4(staticStart),
-      end: integerToIPv4(staticEnd),
-      count: staticCount,
-    },
-    dhcpPool:
-      dhcpCount > 0
-        ? {
-            start: integerToIPv4(dhcpStart),
-            end: integerToIPv4(dhcpEnd),
-            count: dhcpCount,
-          }
-        : null,
+    gateway: gwStr,
+    staticRange,
+    dhcpPool,
     broadcastAddress: bcastStr,
     totalAssignable: usable,
   };

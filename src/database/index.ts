@@ -6,6 +6,6 @@
  */
 export { initRepository, listPlans, getPlan, savePlan, deletePlan, duplicatePlan } from './plans-repository';
 export { listCustomRoles, saveCustomRole, deleteCustomRole } from './plans-repository';
-export { openDatabase, withTransaction, resetDatabase } from './database';
+export { openDatabase, withTransaction, resetDatabase, setDatabaseForTests } from './database';
 export { runMigrations, SCHEMA_VERSION, MIGRATIONS } from './migrations';
 export { resetRepository } from './plans-repository';

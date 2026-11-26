@@ -975,9 +975,34 @@ describe('remaining public helpers', () => {
       expect(alloc.totalAssignable).toBe(254);
     });
 
-    it('honors a custom gateway assignment', () => {
-      const alloc = computeHostAllocation('10.0.0.0/24', '10.0.0.254');
-      expect(alloc.gateway).toBe('10.0.0.254');
+    it('honors a custom gateway assignment and excludes it from static and DHCP pools', () => {
+      const topGw = computeHostAllocation('10.0.0.0/24', '10.0.0.254');
+      expect(topGw.gateway).toBe('10.0.0.254');
+      expect(topGw.staticRange?.start).toBe('10.0.0.1');
+      expect(topGw.dhcpPool?.end).toBe('10.0.0.253');
+
+      const midGw = computeHostAllocation('10.0.0.0/24', '10.0.0.100');
+      expect(midGw.gateway).toBe('10.0.0.100');
+      expect(midGw.dhcpPool?.start).toBe('10.0.0.101');
+      expect(midGw.dhcpPool?.end).toBe('10.0.0.254');
+
+      const highMidGw = computeHostAllocation('10.0.0.0/24', '10.0.0.200');
+      expect(highMidGw.gateway).toBe('10.0.0.200');
+      expect(highMidGw.dhcpPool?.start).toBe('10.0.0.1');
+      expect(highMidGw.dhcpPool?.end).toBe('10.0.0.199');
+      expect(highMidGw.staticRange?.start).toBe('10.0.0.201');
+
+      const badGw = computeHostAllocation('10.0.0.0/24', 'not-an-ip');
+      expect(badGw.gateway).toBe('not-an-ip');
+      expect(badGw.dhcpPool?.end).toBe('10.0.0.254');
+
+      const p2p30 = computeHostAllocation('10.0.0.0/30', '10.0.0.2');
+      expect(p2p30.gateway).toBe('10.0.0.2');
+      expect(p2p30.staticRange).toEqual({ start: '10.0.0.1', end: '10.0.0.1', count: 1 });
+
+      const p2p31 = computeHostAllocation('10.0.0.0/31', '10.0.0.1');
+      expect(p2p31.gateway).toBe('10.0.0.1');
+      expect(p2p31.staticRange).toEqual({ start: '10.0.0.0', end: '10.0.0.0', count: 1 });
     });
 
     it('handles smaller subnets like /28 proportionally', () => {

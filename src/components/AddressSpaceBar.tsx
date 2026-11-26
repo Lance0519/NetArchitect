@@ -33,14 +33,16 @@ import { VlanBadge } from './Badge';
 import { Sheet } from './Sheet';
 import { useTheme } from '@/theme';
 import type { NetworkPlan } from '@/types/network';
-import { calculateSubnet, parseCidr } from '@/core/ip-engine';
+import { calculateSubnet, integerToIPv4, parseCidr } from '@/core/ip-engine';
 import { ROLE_DEFINITION_BY_ROLE } from '@/core/roles';
 import { cn } from '@/utils/cn';
 
 const MIN_SEGMENT_WIDTH = 3;
 const BAR_HEIGHT = 32;
 const BAR_PADDING = 2;
-const FRAGMENT_THRESHOLD = 512; // /29 = 512 addresses; below this is "dust"
+// A /29 holds 2^(32-29) = 8 addresses; free blocks strictly smaller than 8
+// addresses (< /29) are considered fragmented "dust" (matching vlsm-engine).
+const FRAGMENT_THRESHOLD = 8;
 
 const ROLE_FILL_LIGHT: Readonly<Record<string, string>> = {
   LAN: '#2563EB',
@@ -100,8 +102,14 @@ export function AddressSpaceBar({ plan, className }: AddressSpaceBarProps) {
   const [filterRole, setFilterRole] = useState<string | null>(null);
 
   const segments = useMemo(() => {
-    const parentCidr = parseCidr(plan.parentCidr);
-    const parentInfo = calculateSubnet(parentCidr.ip, parentCidr.prefix);
+    let parentInfo: ReturnType<typeof calculateSubnet>;
+    try {
+      const parentCidr = parseCidr(plan.parentCidr);
+      parentInfo = calculateSubnet(parentCidr.ip, parentCidr.prefix);
+    } catch {
+      return [];
+    }
+
     const parentStart = parentInfo.networkAddress;
     const parentEnd = parentInfo.broadcastAddress;
     const parentTotal = parentInfo.totalAddresses;
@@ -109,30 +117,48 @@ export function AddressSpaceBar({ plan, className }: AddressSpaceBarProps) {
     const result: Segment[] = [];
     let cursor = parentStart;
 
-    // Sort subnets by network address
-    const sortedSubnets = [...plan.subnets].sort((a, b) => {
-      const aCidr = parseCidr(a.cidr);
-      const bCidr = parseCidr(b.cidr);
-      return aCidr.ip - bCidr.ip;
-    });
+    // Parse & sort valid subnets by network address (longest/widest first on tie).
+    const parsedSubnets: {
+      subnet: (typeof plan.subnets)[number];
+      info: ReturnType<typeof calculateSubnet>;
+    }[] = [];
+    for (const subnet of plan.subnets) {
+      try {
+        const cidr = parseCidr(subnet.cidr);
+        const info = calculateSubnet(cidr.ip, cidr.prefix);
+        parsedSubnets.push({ subnet, info });
+      } catch {
+        // Skip incomplete draft rows cleanly.
+      }
+    }
+    parsedSubnets.sort(
+      (a, b) =>
+        a.info.networkAddress - b.info.networkAddress ||
+        b.info.totalAddresses - a.info.totalAddresses,
+    );
 
-    for (const subnet of sortedSubnets) {
-      const cidr = parseCidr(subnet.cidr);
-      const info = calculateSubnet(cidr.ip, cidr.prefix);
+    for (const { subnet, info } of parsedSubnets) {
       const subnetStart = info.networkAddress;
       const subnetEnd = info.broadcastAddress;
 
+      // Skip subnets completely outside the parent range.
+      if (subnetEnd < parentStart || subnetStart > parentEnd) continue;
+
+      const clampedStart = Math.max(subnetStart, parentStart);
+      const clampedEnd = Math.min(subnetEnd, parentEnd);
+
       // Free space before this subnet
-      if (subnetStart > cursor) {
-        const freeSize = subnetStart - cursor;
+      if (clampedStart > cursor) {
+        const freeEnd = (clampedStart - 1) >>> 0;
+        const freeSize = clampedStart - cursor;
         const freeWidth = (freeSize / parentTotal) * 100;
         result.push({
           id: `free-${cursor}`,
-          label: 'Free',
-          cidr: `${cursor}-${subnetStart - 1}`,
+          label: 'Free Space',
+          cidr: `${integerToIPv4(cursor)} – ${integerToIPv4(freeEnd)}`,
           role: 'free',
           start: cursor,
-          end: subnetStart - 1,
+          end: freeEnd,
           capacity: freeSize,
           requestedHosts: 0,
           isFree: true,
@@ -143,7 +169,8 @@ export function AddressSpaceBar({ plan, className }: AddressSpaceBarProps) {
       }
 
       // The subnet itself
-      const subnetWidth = (info.totalAddresses / parentTotal) * 100;
+      const visibleSize = clampedEnd - clampedStart + 1;
+      const subnetWidth = (visibleSize / parentTotal) * 100;
       result.push({
         id: subnet.id,
         label: subnet.name,
@@ -156,11 +183,12 @@ export function AddressSpaceBar({ plan, className }: AddressSpaceBarProps) {
         requestedHosts: subnet.requestedHosts,
         isFree: false,
         fill: roleFills[subnet.role] ?? (isDark ? '#94A3B8' : '#64748B'),
-        x: ((subnetStart - parentStart) / parentTotal) * 100,
+        x: ((clampedStart - parentStart) / parentTotal) * 100,
         width: subnetWidth,
       });
 
-      cursor = subnetEnd + 1;
+      // Never move the cursor backwards when subnets overlap or nest.
+      cursor = Math.max(cursor, clampedEnd + 1);
     }
 
     // Trailing free space
@@ -169,8 +197,8 @@ export function AddressSpaceBar({ plan, className }: AddressSpaceBarProps) {
       const freeWidth = (freeSize / parentTotal) * 100;
       result.push({
         id: `free-${cursor}`,
-        label: 'Free',
-        cidr: `${cursor}-${parentEnd}`,
+        label: 'Free Space',
+        cidr: `${integerToIPv4(cursor)} – ${integerToIPv4(parentEnd)}`,
         role: 'free',
         start: cursor,
         end: parentEnd,
@@ -249,7 +277,7 @@ export function AddressSpaceBar({ plan, className }: AddressSpaceBarProps) {
               accessibilityRole="button"
               accessibilityLabel={`Filter by ${roleDef?.label ?? role}`}
               className={cn(
-                'flex-row items-center gap-1.5 rounded-pill border px-2 py-0.5',
+                'min-h-touch flex-row items-center gap-1.5 rounded-pill border px-3 py-1.5',
                 isActive ? 'border-accent bg-accent-soft' : 'border-line bg-surface',
               )}
             >
@@ -321,7 +349,8 @@ export function AddressSpaceBar({ plan, className }: AddressSpaceBarProps) {
                 CAPACITY
               </AppText>
               <AppText variant="body" tone="primary">
-                {selectedSegment.capacity} usable addresses
+                {selectedSegment.capacity}{' '}
+                {selectedSegment.isFree ? 'unallocated addresses' : 'usable addresses'}
               </AppText>
             </View>
 
@@ -332,7 +361,10 @@ export function AddressSpaceBar({ plan, className }: AddressSpaceBarProps) {
                 </AppText>
                 <AppText variant="body" tone="primary">
                   {selectedSegment.requestedHosts} of {selectedSegment.capacity} (
-                  {((selectedSegment.requestedHosts / selectedSegment.capacity) * 100).toFixed(1)}%)
+                  {selectedSegment.capacity > 0
+                    ? ((selectedSegment.requestedHosts / selectedSegment.capacity) * 100).toFixed(1)
+                    : '0.0'}
+                  %)
                 </AppText>
               </View>
             )}
@@ -342,7 +374,7 @@ export function AddressSpaceBar({ plan, className }: AddressSpaceBarProps) {
                 ADDRESS RANGE
               </AppText>
               <AppText variant="body" tone="primary" mono>
-                {selectedSegment.start} – {selectedSegment.end}
+                {integerToIPv4(selectedSegment.start)} – {integerToIPv4(selectedSegment.end)}
               </AppText>
             </View>
           </View>

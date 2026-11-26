@@ -53,6 +53,10 @@ export const openDatabase = (): SQLiteDatabase => {
     // The filename is stable, so the same database is opened on every launch.
     dbHandle = openDatabaseSync('netarchitect.db');
 
+    // `foreign_keys` is connection-scoped in SQLite and resets to OFF on every
+    // new connection; enable it unconditionally so ON DELETE CASCADE always fires.
+    dbHandle.execSync('PRAGMA foreign_keys = ON');
+
     // Run migrations on every open. The cost is a few microseconds when current,
     // and the one-time DDL cost on first launch or after a version bump.
     runMigrations(dbHandle as any);
@@ -65,6 +69,14 @@ export const openDatabase = (): SQLiteDatabase => {
     }
     throw err;
   }
+};
+
+/**
+ * Inject a pre-opened database handle (e.g. an in-memory SQLite or web fallback
+ * instance) for integration tests. Pass `null` to clear.
+ */
+export const setDatabaseForTests = (db: SQLiteDatabase | null): void => {
+  dbHandle = db;
 };
 
 /**

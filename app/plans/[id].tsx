@@ -12,8 +12,8 @@
  * - Confirmation for destructive actions
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Alert, Pressable } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { View, Pressable } from 'react-native';
 import {
   Copy,
   Download,
@@ -31,15 +31,22 @@ import {
   Badge,
   Button,
   Card,
+  CidrBadge,
   ExportSheet,
   Screen,
-  Snackbar,
-  useSnackbar,
+  Sheet,
+  showSnackbar,
 } from '@/components';
 import { useNetworkStore } from '@/store/network-store';
+import { useUiStore } from '@/store/ui-store';
 import { buildPlanView } from '@/utils/planner-view';
 import { getPlan } from '@/database';
-import { evaluatePlan, type PlanDraft, type SubnetRowDraft, GatewayMode } from '@/core/planner-input';
+import {
+  evaluatePlan,
+  type PlanDraft,
+  type SubnetRowDraft,
+  type GatewayMode,
+} from '@/core/planner-input';
 import { computeHostAllocation } from '@/core/ip-engine';
 import type { NetworkPlan, PlannedSubnet } from '@/types/network';
 
@@ -47,43 +54,49 @@ export default function PlanDetailScreen({ route }: { route?: { params: { id: st
   const router = useRouter();
   const searchParams = useLocalSearchParams<{ id: string }>();
   const planId = route?.params?.id ?? searchParams.id ?? '';
-  const { duplicateAndLoad: storeDuplicate, deletePlan: storeDelete, loadPlan } = useNetworkStore();
-  const { snackbars, showSnackbar, dismissSnackbar } = useSnackbar();
+  const storeDuplicate = useNetworkStore((s) => s.duplicateAndLoad);
+  const storeDelete = useNetworkStore((s) => s.deletePlan);
+  const loadPlan = useNetworkStore((s) => s.loadPlan);
+  const revision = useNetworkStore((s) => s.revision);
 
-  const [plan, setPlan] = useState<NetworkPlan | null>(() => getPlan(planId));
-  const [outcome, setOutcome] = useState<ReturnType<typeof evaluatePlan> | null>(null);
-  const [view, setView] = useState<ReturnType<typeof buildPlanView> | null>(null);
+  const [focusTick, setFocusTick] = useState(0);
   const [exportVisible, setExportVisible] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      if (planId) {
-        const refreshed = getPlan(planId);
-        if (refreshed) {
-          setPlan(refreshed);
-        }
-      }
-    }, [planId]),
+      setFocusTick((t) => t + 1);
+    }, []),
   );
 
-  const derived = useMemo(() => {
+  const plan = useMemo<NetworkPlan | null>(() => {
+    void revision;
+    void focusTick;
+    return planId ? getPlan(planId) : null;
+  }, [planId, revision, focusTick]);
+
+  const { outcome, view } = useMemo(() => {
     if (!plan) return { outcome: null, view: null };
     const draft: PlanDraft = {
       name: plan.name,
       description: plan.description,
       parent: plan.parentCidr,
       profile: plan.profile,
-      rows: plan.subnets.map((s): SubnetRowDraft => ({
-        id: s.id,
-        name: s.name,
-        role: s.role,
-        customRoleLabel: s.customRoleLabel ?? '',
-        vlan: s.vlanId !== undefined ? String(s.vlanId) : '',
-        cidr: s.cidr,
-        gateway: s.gateway ?? '',
-        gatewayMode: (s.gateway !== undefined ? 'manual' : 'auto') as GatewayMode,
-        hosts: String(s.requestedHosts),
-      })),
+      rows: plan.subnets.map((s): SubnetRowDraft => {
+        const mode: GatewayMode =
+          s.gatewayMode ?? (s.gateway !== undefined ? 'manual' : 'auto');
+        return {
+          id: s.id,
+          name: s.name,
+          role: s.role,
+          customRoleLabel: s.customRoleLabel ?? '',
+          vlan: s.vlanId !== undefined ? String(s.vlanId) : '',
+          cidr: s.cidr,
+          gateway: mode === 'manual' ? (s.gateway ?? '') : '',
+          gatewayMode: mode,
+          hosts: String(s.requestedHosts),
+        };
+      }),
     };
     const evalResult = evaluatePlan(draft);
     return {
@@ -91,12 +104,6 @@ export default function PlanDetailScreen({ route }: { route?: { params: { id: st
       view: buildPlanView(draft, evalResult),
     };
   }, [plan]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOutcome(derived.outcome);
-    setView(derived.view);
-  }, [derived]);
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -148,21 +155,14 @@ export default function PlanDetailScreen({ route }: { route?: { params: { id: st
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      'Delete plan?',
-      `"${plan.name}" will be permanently deleted. This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            storeDelete(planId);
-            handleBack();
-          },
-        },
-      ],
-    );
+    setDeleteConfirmVisible(true);
+  };
+
+  const confirmDelete = () => {
+    setDeleteConfirmVisible(false);
+    storeDelete(planId);
+    showSnackbar(`Deleted "${plan.name}"`);
+    handleBack();
   };
 
   const findings = outcome?.kind === 'ready' ? outcome.findings : [];
@@ -282,19 +282,31 @@ export default function PlanDetailScreen({ route }: { route?: { params: { id: st
         onClose={() => setExportVisible(false)}
       />
 
-      {/* Snackbars */}
-      <View className="absolute bottom-4 left-4 right-4 z-50 flex-col items-center gap-2 pointer-events-none">
-        {snackbars.map((sb) => (
-          <Snackbar
-            key={sb.id}
-            message={sb.message}
-            actionLabel={sb.actionLabel}
-            onAction={sb.onAction}
-            duration={sb.duration}
-            onDismiss={() => dismissSnackbar(sb.id)}
-          />
-        ))}
-      </View>
+      {/* Cross-platform delete confirmation sheet (works on Web, iOS, and Android) */}
+      <Sheet
+        visible={deleteConfirmVisible}
+        onClose={() => setDeleteConfirmVisible(false)}
+        title="Delete plan?"
+        subtitle="This removes the saved plan and all of its subnets from this device."
+        footer={
+          <View className="flex-row gap-2">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onPress={() => setDeleteConfirmVisible(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="danger" className="flex-1" onPress={confirmDelete}>
+              Delete
+            </Button>
+          </View>
+        }
+      >
+        <AppText variant="body" tone="muted">
+          {`"${plan.name}" will be permanently deleted. This cannot be undone.`}
+        </AppText>
+      </Sheet>
     </Screen>
   );
 }
@@ -315,6 +327,7 @@ function SubnetTableView({
   readonly rows: ReturnType<typeof buildPlanView>['rows'];
   readonly subnets: readonly PlannedSubnet[];
 }) {
+  const cidrDisplayFormat = useUiStore((s) => s.cidrDisplayFormat);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const subnetMap = useMemo(() => new Map(subnets.map((s) => [s.id, s])), [subnets]);
 
@@ -323,7 +336,14 @@ function SubnetTableView({
       {rows.map((row) => {
         const subnet = subnetMap.get(row.id);
         const isExpanded = expandedId === row.id;
-        const alloc = subnet ? computeHostAllocation(subnet.cidr, subnet.gateway) : null;
+        let alloc: ReturnType<typeof computeHostAllocation> | null = null;
+        if (subnet) {
+          try {
+            alloc = computeHostAllocation(subnet.cidr, subnet.gateway);
+          } catch {
+            alloc = null;
+          }
+        }
 
         return (
           <View
@@ -334,13 +354,17 @@ function SubnetTableView({
               accessibilityRole="button"
               accessibilityLabel={`${row.name}, ${row.cidr}`}
               onPress={() => setExpandedId(isExpanded ? null : row.id)}
-              className="flex-row items-center justify-between"
+              className="min-h-touch flex-row items-center justify-between"
             >
               <View className="flex-1 gap-1 pr-2">
                 <View className="flex-row items-center gap-2 flex-wrap">
-                  <AppText variant="subheading" tone="primary" mono>
-                    {row.cidr}
-                  </AppText>
+                  {cidrDisplayFormat === 'badge' ? (
+                    <CidrBadge value={row.cidr} />
+                  ) : (
+                    <AppText variant="subheading" tone="primary" mono>
+                      {row.cidr}
+                    </AppText>
+                  )}
                   {subnet?.vlanId !== undefined ? (
                     <Badge tone="info">{`VLAN ${subnet.vlanId}`}</Badge>
                   ) : null}
@@ -382,7 +406,7 @@ function SubnetTableView({
                     </AppText>
                   </View>
                   <AppText mono variant="body" tone="accent" className="font-semibold">
-                    {alloc.gateway}
+                    {subnet?.gatewayMode === 'none' ? 'None (gateway-less)' : alloc.gateway}
                   </AppText>
                 </View>
 

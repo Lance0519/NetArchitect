@@ -849,4 +849,28 @@ describe('the resolved plan', () => {
       expect(detail.gateway).toBe(integerToIPv4(engineSubnet.firstUsableHost));
     }
   });
+
+  it('flags overlapping /32 host routes and /32 colliding with a /24 boundary', () => {
+    const identical32 = draftWith([
+      ['Loopback A', '192.168.1.1/32', '1'],
+      ['Loopback B', '192.168.1.1/32', '1'],
+    ]);
+    const identicalOutcome = evaluatePlan(identical32);
+    expect(identicalOutcome.kind).toBe('ready');
+    if (identicalOutcome.kind === 'ready') {
+      expect(identicalOutcome.findings.some((f) => f.kind === 'overlap')).toBe(true);
+    }
+
+    const boundary32 = draftWith([
+      ['LAN', '192.168.1.0/24', '100'],
+      ['Zero Host', '192.168.1.0/32', '1'],
+      ['Broadcast Host', '192.168.1.255/32', '1'],
+    ]);
+    const boundaryOutcome = evaluatePlan(boundary32);
+    expect(boundaryOutcome.kind).toBe('ready');
+    if (boundaryOutcome.kind === 'ready') {
+      const overlaps = boundaryOutcome.findings.filter((f) => f.kind === 'overlap');
+      expect(overlaps).toHaveLength(2);
+    }
+  });
 });

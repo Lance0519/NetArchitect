@@ -1,28 +1,26 @@
 /**
- * SubnetCard - displays a subnet with its key properties.
- *
- * Used in VLSM results, network planner, and plan details.
- * Shows network, CIDR, host capacity, requested hosts, utilization, and VLAN.
+ * SubnetCard - displays an allocated or planned subnet with key capacity metrics.
  */
 
 import { View } from 'react-native';
 
-import { AppText } from '../AppText';
-import { Badge, CidrBadge, VlanBadge } from '../ui/Badge';
-import { Card } from '../ui/Card';
-import { ProgressBar } from '../ui/ProgressBar';
+import { AppText } from './AppText';
+import { Badge, CidrBadge, VlanBadge } from './Badge';
+import { Card } from './Card';
+import { ProgressBar } from './ProgressBar';
+import { useUiStore } from '@/store/ui-store';
 import { cn } from '@/utils/cn';
 
 export interface SubnetCardProps {
-  name: string;
-  cidr: string;
-  capacity: string;
-  requested: string;
-  utilization: string;
-  vlanId?: number;
-  role?: string;
-  isUntrusted?: boolean;
-  className?: string;
+  readonly name: string;
+  readonly cidr: string;
+  readonly capacity: string;
+  readonly requested: string;
+  readonly utilization: string;
+  readonly vlanId?: number | undefined;
+  readonly role?: string | undefined;
+  readonly isUntrusted?: boolean | undefined;
+  readonly className?: string | undefined;
 }
 
 export function SubnetCard({
@@ -36,16 +34,23 @@ export function SubnetCard({
   isUntrusted,
   className,
 }: SubnetCardProps) {
+  const cidrDisplayFormat = useUiStore((s) => s.cidrDisplayFormat);
   const utilPercent = parseFloat(utilization) || 0;
 
   return (
     <Card padding="md" className={cn('gap-3', className)}>
       <View className="flex-row items-start justify-between gap-2">
-        <View className="flex-1 gap-0.5">
+        <View className="flex-1 gap-1">
           <AppText variant="subheading" tone="primary" numberOfLines={1}>
             {name}
           </AppText>
-          <CidrBadge value={cidr} />
+          {cidrDisplayFormat === 'badge' ? (
+            <CidrBadge value={cidr} />
+          ) : (
+            <AppText mono variant="caption" tone="accent">
+              {cidr}
+            </AppText>
+          )}
         </View>
         {vlanId !== undefined ? <VlanBadge vlanId={vlanId} /> : null}
       </View>

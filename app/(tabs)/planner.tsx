@@ -29,12 +29,14 @@ import {
   Sheet,
   SubnetEditor,
   TextField,
+  showSnackbar,
 } from '@/components';
 import { evaluatePlan, type PlannerOutcome } from '@/core/planner-input';
 import { SELECTABLE_PROFILES, profileById, type ProfileDefinition } from '@/core/profiles';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { usePlanStore, selectCanSave } from '@/store/plan-store';
 import { useNetworkStore } from '@/store/network-store';
+import { useUiStore } from '@/store/ui-store';
 import { useVlsmStore } from '@/store/vlsm-store';
 import { buildPlanView, unassignedFindings } from '@/utils/planner-view';
 
@@ -63,10 +65,14 @@ export default function PlannerScreen() {
   const canSave = usePlanStore(selectCanSave);
 
   const save = useNetworkStore((state) => state.save);
+  const showAdvancedFields = useUiStore((state) => state.showAdvancedFields);
 
   const consumeHandoff = useVlsmStore((state) => state.consumeHandoff);
 
   const [operationError, setOperationError] = useState<string | null>(null);
+  const [headerExtrasExpanded, setHeaderExtrasExpanded] = useState(false);
+  const showHeaderExtras =
+    showAdvancedFields || headerExtrasExpanded || draft.description.trim().length > 0;
 
   useEffect(() => {
     takeHandoff(consumeHandoff());
@@ -131,11 +137,14 @@ export default function PlannerScreen() {
   }, [reset]);
   const handleSave = useCallback(() => {
     setOperationError(null);
-    save();
-    // No confirmation snackbar: the footer is pinned, and its label flipping from "Save
-    // plan" to "Update plan" is the confirmation - it says what was written, and it keeps
-    // saying it for as long as the editor holds that plan.
-  }, [save]);
+    const wasNew = currentPlanId === null;
+    try {
+      const savedPlan = save();
+      showSnackbar(wasNew ? `Saved "${savedPlan.name || 'Untitled plan'}"` : `Updated "${savedPlan.name || 'Untitled plan'}"`);
+    } catch (err) {
+      setOperationError(err instanceof Error ? err.message : 'Could not save plan.');
+    }
+  }, [currentPlanId, save]);
 
   return (
     <Screen
@@ -182,15 +191,26 @@ export default function PlannerScreen() {
             error={headerError(outcome, 'parent')}
           />
 
-          <TextField
-            label="Notes"
-            value={draft.description}
-            onChangeText={editDescription}
-            placeholder="Optional"
-            autoCapitalize="sentences"
-            multiline
-            hint="Free text, kept with the plan."
-          />
+          {showHeaderExtras ? (
+            <TextField
+              label="Notes"
+              value={draft.description}
+              onChangeText={editDescription}
+              placeholder="Optional"
+              autoCapitalize="sentences"
+              multiline
+              hint="Free text, kept with the plan."
+            />
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onPress={() => setHeaderExtrasExpanded(true)}
+              className="self-start px-0"
+            >
+              Add notes (optional)
+            </Button>
+          )}
         </Card>
 
         {/* Template Picker */}

@@ -5,7 +5,7 @@
  * binary power-of-two boundaries.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import {
@@ -16,7 +16,7 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 
-import { AppText, Badge, Button, Card, TextField } from '@/components';
+import { AppText, Badge, Button, Card, TextField, showSnackbar } from '@/components';
 import {
   createSubnetTree,
   getActiveLeafSubnets,
@@ -36,6 +36,14 @@ export function SubnetSplitterView() {
   const [tree, setTree] = useState<SubnetTree>(() => createSubnetTree('192.168.1.0/24'));
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
   const handleInitRoot = (cidr: string) => {
     try {
@@ -67,8 +75,10 @@ export function SubnetSplitterView() {
   const handleCopyAll = () => {
     const text = leaves.map((l) => `${l.cidr} - ${l.usableHosts} usable hosts`).join('\n');
     void Clipboard.setStringAsync(text);
+    showSnackbar(`Copied ${leaves.length} subnet${leaves.length === 1 ? '' : 's'} to clipboard`);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (timerRef.current !== null) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -88,7 +98,7 @@ export function SubnetSplitterView() {
               accessibilityRole="button"
               accessibilityLabel={`Select root block ${p.label}`}
               onPress={() => handleInitRoot(p.cidr)}
-              className="rounded-pill border border-line bg-surface-raised px-3 py-1.5 active:bg-accent"
+              className="min-h-touch justify-center rounded-pill border border-line bg-surface-raised px-3 py-1.5 active:border-accent active:bg-accent-soft"
             >
               <AppText variant="caption" tone="accent" className="font-medium">
                 {p.label}

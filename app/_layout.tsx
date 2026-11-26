@@ -35,41 +35,29 @@ import '@/theme/icons';
 
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { LogBox } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { ErrorBoundaryProps } from 'expo-router';
 
-import { ErrorBoundary as AppErrorBoundary, ErrorFallback } from '@/components';
+import { ErrorBoundary as AppErrorBoundary, ErrorFallback, SnackbarHost } from '@/components';
 import { useTheme } from '@/theme';
-
-// Suppress floating warning overlay over bottom navigation bar in dev
-LogBox.ignoreAllLogs();
 
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   return <ErrorFallback error={error} resetErrorBoundary={retry} />;
 }
 
 /**
- * Applies the resolved colour scheme to NativeWind.
- *
- * Renders nothing. It exists as a component because the scheme has to come from a
- * hook - it depends on both the stored preference and the live OS setting - and a
- * hook cannot be called at module scope. Mounting it once here means the scheme
- * is applied before any screen renders.
+ * Applies the resolved colour scheme to NativeWind and renders the root Stack
+ * with a native-compatible canvas background colour (CSS `var()` strings are
+ * not understood by React Native's native Stack `contentStyle`).
  */
-function ThemeSync() {
+function RootNavigator() {
   const { scheme } = useTheme();
-  // Light content on a light status bar is unreadable. The bar background itself
-  // is transparent on both platforms, so the *style* is the only thing that needs
-  // to track the theme.
-  return <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />;
-}
+  const canvasColor = scheme === 'dark' ? '#0A0C10' : '#F6F7FA';
 
-export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <ThemeSync />
+    <>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <AppErrorBoundary>
         <Stack
           screenOptions={{
@@ -77,7 +65,7 @@ export default function RootLayout() {
             // is off. Two headers on one screen is a layout bug, and having the
             // native one appear conditionally per platform is worse.
             headerShown: false,
-            contentStyle: { backgroundColor: 'rgb(var(--bg-canvas))' },
+            contentStyle: { backgroundColor: canvasColor },
           }}
         >
           <Stack.Screen name="(tabs)" />
@@ -86,6 +74,15 @@ export default function RootLayout() {
           <Stack.Screen name="settings" options={{ presentation: 'card' }} />
         </Stack>
       </AppErrorBoundary>
+      <SnackbarHost />
+    </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <SafeAreaProvider>
+      <RootNavigator />
     </SafeAreaProvider>
   );
 }

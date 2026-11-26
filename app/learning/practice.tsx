@@ -18,32 +18,38 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { AppText, Button, Card, ProgressBar, Screen } from '@/components';
 import { generateQuestion, QUESTION_TYPES, type Question, type QuestionType } from '@/core/question-generator';
-import { useLearningProgress } from '@/hooks/useLearningProgress';
+import { topicsForQuestionType, useLearningProgress } from '@/hooks/useLearningProgress';
+
+const QUESTIONS_PER_SESSION = 10;
 
 export default function PracticeScreen() {
   const router = useRouter();
-  const searchParams = useLocalSearchParams<{ type?: string }>();
+  const searchParams = useLocalSearchParams<{ type?: string; topicId?: string }>();
   const initialType: QuestionType =
     searchParams.type && QUESTION_TYPES.includes(searchParams.type as QuestionType)
       ? (searchParams.type as QuestionType)
       : 'smallest-cidr';
 
   const [questionType, setQuestionType] = useState<QuestionType>(initialType);
-  const [seedCounter, setSeedCounter] = useState(1337);
-  const [question, setQuestion] = useState<Question | null>(() => generateQuestion(initialType, 1337));
+  const [seedCounter, setSeedCounter] = useState(
+    () => Math.floor((Date.now() % 90000) + Math.random() * 9000) + 1,
+  );
+  const [question, setQuestion] = useState<Question | null>(() =>
+    generateQuestion(initialType, seedCounter),
+  );
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [questionNumber, setQuestionNumber] = useState(1);
   const { recordAttempt } = useLearningProgress();
 
   const handleGenerate = (typeToUse = questionType) => {
-    const nextSeed = (seedCounter * 1664525 + 1013904223) % 100000;
+    const nextSeed = ((seedCounter * 1664525 + 1013904223) & 0x7fffffff) % 100000 || 1;
     setSeedCounter(nextSeed);
     const q = generateQuestion(typeToUse, nextSeed);
     setQuestion(q);
     setSelectedIndex(null);
     setShowExplanation(false);
-    setQuestionNumber((n) => n + 1);
+    setQuestionNumber((n) => (n >= QUESTIONS_PER_SESSION ? 1 : n + 1));
   };
 
   const handleSelectType = (type: QuestionType) => {
@@ -54,7 +60,14 @@ export default function PracticeScreen() {
   const handleSubmit = () => {
     if (question === null || selectedIndex === null) return;
     setShowExplanation(true);
-    recordAttempt(questionType, selectedIndex === question.correctIndex);
+    const isCorrect = selectedIndex === question.correctIndex;
+    // Update both the specific topic (if launched from Topic Detail) and every
+    // curriculum topic reinforced by this drill type so progress bars stay live.
+    const linkedTopics =
+      searchParams.topicId && searchParams.topicId.length > 0
+        ? [searchParams.topicId]
+        : topicsForQuestionType(questionType);
+    recordAttempt(questionType, isCorrect, linkedTopics);
   };
 
   const handleBack = () => {
@@ -82,13 +95,16 @@ export default function PracticeScreen() {
           <View className="gap-2">
             <View className="flex-row items-center justify-between">
               <AppText variant="label" tone="muted">
-                QUESTION {questionNumber + 1}
+                QUESTION {questionNumber}
               </AppText>
               <AppText variant="caption" tone="faint">
                 {questionType.replace(/-/g, ' ').toUpperCase()}
               </AppText>
             </View>
-            <ProgressBar value={questionNumber / 10} label={`${questionNumber} / 10`} />
+            <ProgressBar
+              value={Math.min(1, questionNumber / QUESTIONS_PER_SESSION)}
+              label={`${questionNumber} / ${QUESTIONS_PER_SESSION}`}
+            />
           </View>
         </Card>
 

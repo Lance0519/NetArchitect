@@ -19,10 +19,16 @@ import { severityMeta } from '@/theme/severity';
 
 export interface SecurityIssueCardProps {
   readonly issue: SecurityIssue;
-  readonly onSubnetPress?: (subnetId: string) => void;
+  /** Optional map of subnetId -> human-readable label (e.g. "LAN (10.0.1.0/24)"). */
+  readonly subnetLabels?: Readonly<Record<string, string>> | undefined;
+  readonly onSubnetPress?: ((subnetId: string) => void) | undefined;
 }
 
-export function SecurityIssueCard({ issue, onSubnetPress }: SecurityIssueCardProps) {
+export function SecurityIssueCard({
+  issue,
+  subnetLabels,
+  onSubnetPress,
+}: SecurityIssueCardProps) {
   const meta = severityMeta(issue.severity);
   const Icon = meta.icon;
 
@@ -87,18 +93,22 @@ export function SecurityIssueCard({ issue, onSubnetPress }: SecurityIssueCardPro
               AFFECTED SUBNETS
             </AppText>
             <View className="flex-row flex-wrap gap-2">
-              {issue.affectedSubnetIds.map((id) => (
-                <Pressable
-                  key={id}
-                  onPress={() => onSubnetPress?.(id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Go to subnet ${id}`}
-                >
-                  <AppText variant="caption" tone="accent">
-                    {id}
-                  </AppText>
-                </Pressable>
-              ))}
+              {issue.affectedSubnetIds.map((id) => {
+                const label = subnetLabels?.[id] ?? id;
+                return (
+                  <Pressable
+                    key={id}
+                    onPress={() => onSubnetPress?.(id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Go to subnet ${label}`}
+                    className="min-h-touch justify-center rounded-pill border border-line bg-surface-raised px-3 py-1.5 active:bg-accent-soft"
+                  >
+                    <AppText variant="caption" tone="accent" mono>
+                      {label}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
         )}

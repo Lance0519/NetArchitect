@@ -19,15 +19,15 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   AddressSpaceBar,
   AppText,
+  AuditSummary,
   Banner,
+  Button,
   Card,
   EmptyState,
   Screen,
   SecurityIssueCard,
   SegmentedControl,
 } from '@/components';
-import { Button } from '@/components/ui/Button';
-import { AuditSummary } from '@/components/security';
 import { auditPlan } from '@/core/security-auditor';
 import { SECURITY_DISCLAIMER } from '@/core/standards';
 import { useNetworkStore } from '@/store/network-store';
@@ -35,27 +35,34 @@ import type { NetworkPlan, SecurityIssue, Severity } from '@/types/network';
 import { SEVERITY_ORDERED, severityMeta } from '@/theme/severity';
 import { cn } from '@/utils/cn';
 
+const TOTAL_AUDIT_RULES = 17;
+
 export default function AuditScreen() {
   const router = useRouter();
   const searchParams = useLocalSearchParams<{ planId?: string }>();
-  const { listPlans } = useNetworkStore();
-  const [plans, setPlans] = useState<readonly NetworkPlan[]>(() => listPlans());
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(
-    () => searchParams.planId ?? null,
-  );
+  const listPlans = useNetworkStore((s) => s.listPlans);
+  const revision = useNetworkStore((s) => s.revision);
+  const [focusTick, setFocusTick] = useState(0);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [severityFilter, setSeverityFilter] = useState<Severity | 'all'>('all');
 
   useFocusEffect(
     useCallback(() => {
-      const currentPlans = listPlans();
-      setPlans(currentPlans);
-      if (searchParams.planId && currentPlans.some((p) => p.id === searchParams.planId)) {
-        setSelectedPlanId(searchParams.planId);
-      }
-    }, [listPlans, searchParams.planId]),
+      setFocusTick((t) => t + 1);
+    }, []),
   );
 
-  const activePlanId = selectedPlanId ?? plans[0]?.id ?? null;
+  const plans = useMemo<readonly NetworkPlan[]>(() => {
+    void revision;
+    void focusTick;
+    return listPlans();
+  }, [listPlans, revision, focusTick]);
+
+  const paramPlanId =
+    searchParams.planId && plans.some((p) => p.id === searchParams.planId)
+      ? searchParams.planId
+      : null;
+  const activePlanId = selectedPlanId ?? paramPlanId ?? plans[0]?.id ?? null;
 
   const selectedPlan = useMemo(
     () => plans.find((p) => p.id === activePlanId) ?? null,
@@ -82,6 +89,13 @@ export default function AuditScreen() {
     return grouped;
   }, [issues]);
 
+  const subnetLabels = useMemo(() => {
+    if (!selectedPlan) return {};
+    return Object.fromEntries(
+      selectedPlan.subnets.map((s) => [s.id, `${s.name || 'Subnet'} (${s.cidr || 'no CIDR'})`]),
+    );
+  }, [selectedPlan]);
+
   const handleSubnetPress = (_subnetId: string) => {
     if (selectedPlan) {
       router.push(`/plans/${selectedPlan.id}` as any);
@@ -94,6 +108,8 @@ export default function AuditScreen() {
   const infoCount = issuesBySeverity.get('info')?.length ?? 0;
   const totalWarnings = mediumCount + infoCount;
   const totalCritical = criticalCount + highCount;
+  const failedRuleCount = useMemo(() => new Set(issues.map((i) => i.ruleId)).size, [issues]);
+  const checksPassed = Math.max(0, TOTAL_AUDIT_RULES - failedRuleCount);
 
   return (
     <Screen
@@ -136,6 +152,7 @@ export default function AuditScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="View all plans"
                 onPress={() => router.push('/plans')}
+                className="min-h-touch justify-center px-1"
               >
                 <AppText variant="caption" tone="accent">
                   Manage Plans
@@ -158,7 +175,7 @@ export default function AuditScreen() {
                     accessibilityLabel={`${p.name} (${p.parentCidr})`}
                     onPress={() => setSelectedPlanId(p.id)}
                     className={cn(
-                      'flex-row items-center gap-2 rounded-pill border px-3.5 py-2 active:bg-surface-raised',
+                      'min-h-touch flex-row items-center gap-2 rounded-pill border px-3.5 py-2 active:bg-surface-raised',
                       isSelected
                         ? 'border-accent bg-accent'
                         : 'border-line bg-surface',
@@ -192,7 +209,7 @@ export default function AuditScreen() {
               planName={selectedPlan.name}
               parentCidr={selectedPlan.parentCidr}
               subnetCount={selectedPlan.subnets.length}
-              checksPassed={17 - issues.length}
+              checksPassed={checksPassed}
               warnings={totalWarnings}
               critical={totalCritical}
             />
@@ -234,10 +251,11 @@ export default function AuditScreen() {
               />
             ) : (
               <View className="gap-3">
-                {filteredIssues.map((issue) => (
+                {filteredIssues.map((issue, idx) => (
                   <SecurityIssueCard
-                    key={`${issue.ruleId}-${issue.affectedSubnetIds.join(',')}`}
+                    key={`${issue.ruleId}-${issue.affectedSubnetIds.join(',')}-${idx}`}
                     issue={issue}
+                    subnetLabels={subnetLabels}
                     onSubnetPress={handleSubnetPress}
                   />
                 ))}

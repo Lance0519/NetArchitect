@@ -30,7 +30,7 @@ export interface Migration {
 }
 
 /** Current schema version. Increment when adding a migration. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /**
  * Migration list. Ordered, append-only, never reordered.
@@ -114,6 +114,53 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
           created_at INTEGER NOT NULL
         )
       `);
+    },
+  },
+  {
+    version: 2,
+    up: (db) => {
+      // Rebuild `subnets` with:
+      //  1. Composite PRIMARY KEY (plan_id, id) so two saved plans can never
+      //     collide on deterministic draft/template row IDs (`row-1`, `personal-0`).
+      //  2. `gateway_mode` ('auto' | 'manual' | 'none') so an explicitly cleared
+      //     gateway survives save/load round-trips instead of reverting to 'auto'.
+      db.execSync(`
+        CREATE TABLE subnets_v2 (
+          id TEXT NOT NULL,
+          plan_id TEXT NOT NULL REFERENCES network_plans(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          role TEXT NOT NULL,
+          custom_role_label TEXT,
+          vlan_id INTEGER,
+          network_address TEXT NOT NULL,
+          cidr TEXT NOT NULL,
+          mask TEXT NOT NULL,
+          gateway TEXT,
+          gateway_mode TEXT NOT NULL DEFAULT 'auto',
+          requested_hosts INTEGER NOT NULL DEFAULT 0,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY (plan_id, id)
+        )
+      `);
+
+      db.execSync(`
+        INSERT INTO subnets_v2 (
+          id, plan_id, name, role, custom_role_label, vlan_id,
+          network_address, cidr, mask, gateway, gateway_mode,
+          requested_hosts, sort_order, created_at
+        )
+        SELECT
+          id, plan_id, name, role, custom_role_label, vlan_id,
+          network_address, cidr, mask, gateway,
+          CASE WHEN gateway IS NOT NULL THEN 'manual' ELSE 'auto' END,
+          requested_hosts, sort_order, created_at
+        FROM subnets
+      `);
+
+      db.execSync('DROP TABLE subnets');
+      db.execSync('ALTER TABLE subnets_v2 RENAME TO subnets');
+      db.execSync('CREATE INDEX idx_subnets_plan ON subnets(plan_id)');
     },
   },
 ]);

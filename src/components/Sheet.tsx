@@ -33,6 +33,7 @@ import { X } from 'lucide-react-native';
 
 import { AppText } from './AppText';
 import { IconButton } from './Button';
+import { SnackbarHost } from './Snackbar';
 import { cn } from '@/utils/cn';
 
 export interface SheetProps {
@@ -117,6 +118,7 @@ export function Sheet({
             </View>
           )}
         </View>
+        {visible ? <SnackbarHost inModal /> : null}
       </View>
     </Modal>
   );

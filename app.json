@@ -48,6 +48,11 @@
       "typedRoutes": true
     },
 
-    "plugins": ["expo-router", "expo-sqlite", "expo-sharing", "expo-web-browser"]
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-sharing",
+      "./plugins/with-privacy-hardening"
+    ]
   }
 }

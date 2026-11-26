@@ -21,10 +21,19 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      // Only pure logic is held to a coverage bar. UI files are covered by
-      // type-checking and device testing, not by unit tests.
-      include: ['src/core/**/*.ts', 'src/utils/**/*.ts'],
-      exclude: ['src/core/errors.ts'],
+      // Core engines, view/formatting utilities, SQLite migrations & repository,
+      // and pure/ephemeral stores are all held to the coverage bar.
+      include: [
+        'src/core/**/*.ts',
+        'src/utils/**/*.ts',
+        'src/database/migrations.ts',
+        'src/database/plans-repository.ts',
+        'src/database/web-fallback.ts',
+        'src/store/plan-store.ts',
+        'src/store/network-store.ts',
+        'src/store/vlsm-store.ts',
+      ],
+      exclude: ['src/core/errors.ts', 'src/utils/index.ts'],
       reporter: ['text-summary', 'html'],
       thresholds: {
         lines: 95,

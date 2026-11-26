@@ -152,6 +152,11 @@ export interface PlannedSubnet {
   readonly cidr: string;
   /** Gateway address, conventionally the first usable host. */
   readonly gateway?: string;
+  /**
+   * How the gateway was chosen so save/load round-trips distinguish an
+   * explicitly cleared gateway (`none`) from an auto-derived gateway (`auto`).
+   */
+  readonly gatewayMode?: 'auto' | 'manual' | 'none';
   /** Host count the user is designing for. Drives utilisation. */
   readonly requestedHosts: number;
   /** Display order. */
@@ -290,7 +295,14 @@ export interface HostAllocationPlan {
  * Configuration export
  * ------------------------------------------------------------------ */
 
-export type ExportTarget = 'cisco-ios' | 'linux-iptables' | 'mikrotik' | 'terraform' | 'json';
+export type ExportTarget =
+  | 'cisco-ios'
+  | 'linux-iptables'
+  | 'linux-netplan'
+  | 'mikrotik'
+  | 'terraform'
+  | 'markdown'
+  | 'json';
 
 export interface ExportOptions {
   /**

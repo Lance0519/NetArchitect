@@ -33,10 +33,11 @@ import { Pressable, View } from 'react-native';
 import { Copy, Info } from 'lucide-react-native';
 
 import { AppText } from './AppText';
-import { Badge, type BadgeTone } from './Badge';
+import { Badge, CidrBadge, type BadgeTone } from './Badge';
 import { Banner, type BannerTone } from './Banner';
 import { Card } from './Card';
 import { Divider } from './Divider';
+import { useUiStore } from '@/store/ui-store';
 import { cn } from '@/utils/cn';
 
 import type { SubnetNotice, SubnetRow, SubnetView } from '@/utils/subnet-view';
@@ -45,6 +46,8 @@ export interface IpResultCardProps {
   readonly view: SubnetView;
   /** Called with the row's label and value when a row is tapped. */
   readonly onCopy: (label: string, value: string) => void;
+  /** Whether to render the secondary/advanced rows (binary, mask, wildcard). Defaults to true. */
+  readonly showDetails?: boolean | undefined;
 }
 
 /**
@@ -134,25 +137,14 @@ function ResultRow({ row, onCopy, emphasis }: ResultRowProps) {
  * The card
  * ------------------------------------------------------------------ */
 
-export function IpResultCard({ view, onCopy }: IpResultCardProps) {
+export function IpResultCard({ view, onCopy, showDetails = true }: IpResultCardProps) {
+  const cidrDisplayFormat = useUiStore((s) => s.cidrDisplayFormat);
+
   return (
     <View className="gap-3">
       {/* Notices come first. A /31 or a /32 is surprising, and a user who has just
           been told their input was a host rather than a block should not have to
           scroll past twelve rows to find out. */}
-      {/*
-        The body is a plain string, deliberately.
-
-        `Banner` renders its own tone icon and wraps `children` in an `AppText`. So
-        passing a `<View>` here - as an earlier version did, to place a second icon
-        beside the body - nests a View inside a native `<Text>`, which is unsupported
-        on Android. And it would have drawn two icons, the second in a `text-warn`
-        class that does not exist, so it would have rendered uncoloured. Both failures
-        are invisible to `tsc`, to ESLint and to a passing `expo export`, and both are
-        only reachable on a device. Letting Banner own its icon is also simply correct:
-        `warn` already maps to `text-high`, so the colour matches the border and title
-        by construction instead of by my having guessed the token.
-      */}
       {view.notices.map((notice) => (
         <Banner
           key={notice.title}
@@ -167,9 +159,13 @@ export function IpResultCard({ view, onCopy }: IpResultCardProps) {
         {/* Header: which block this is, and what kind of space it sits in. */}
         <View className="gap-2 px-4 pb-3 pt-4">
           <View className="flex-row flex-wrap items-center gap-2">
-            <AppText mono variant="title">
-              {view.networkCidr}
-            </AppText>
+            {cidrDisplayFormat === 'badge' ? (
+              <CidrBadge value={view.networkCidr} />
+            ) : (
+              <AppText mono variant="title">
+                {view.networkCidr}
+              </AppText>
+            )}
             <Badge tone={addressSpaceTone(view)}>{view.addressSpace.label}</Badge>
           </View>
 
@@ -197,14 +193,18 @@ export function IpResultCard({ view, onCopy }: IpResultCardProps) {
           ))}
         </View>
 
-        <Divider />
+        {showDetails ? (
+          <>
+            <Divider />
 
-        {/* Everything else. */}
-        <View className="px-2 py-1">
-          {view.detail.map((row) => (
-            <ResultRow key={row.label} row={row} onCopy={onCopy} emphasis={false} />
-          ))}
-        </View>
+            {/* Secondary / advanced details (masks, wildcard, binary). */}
+            <View className="px-2 py-1">
+              {view.detail.map((row) => (
+                <ResultRow key={row.label} row={row} onCopy={onCopy} emphasis={false} />
+              ))}
+            </View>
+          </>
+        ) : null}
       </Card>
 
       {/*

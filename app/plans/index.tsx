@@ -1,25 +1,20 @@
 /**
- * Saved Plans - Redesigned.
- *
- * Project files view for managing saved network plans.
- * Shows plan cards with name, parent network, subnet count, and last modified.
- *
- * Design principles:
- * - Project files metaphor: cards, not table rows
- * - Clear status indicators
- * - Easy management: open, rename, duplicate, delete
- * - Confirmation for destructive actions
+ * Saved Plans - project files list for managing saved network plans.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, TextInput } from 'react-native';
 import { Plus, Search } from 'lucide-react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 
-import { useRouter } from 'expo-router';
-
-import { AppText, Card, EmptyState, Screen, Snackbar, useSnackbar } from '@/components';
-import { Button } from '@/components/ui/Button';
-import { StatusIndicator } from '@/components/ui/StatusIndicator';
+import {
+  AppText,
+  Button,
+  Card,
+  EmptyState,
+  Screen,
+  StatusIndicator,
+} from '@/components';
 import { useTheme } from '@/theme';
 import { useNetworkStore } from '@/store/network-store';
 
@@ -30,33 +25,51 @@ const SEARCH_DEBOUNCE_MS = 150;
 export default function PlansListScreen() {
   const router = useRouter();
   const { scheme } = useTheme();
-  const { listPlans } = useNetworkStore();
-  const { snackbars } = useSnackbar();
+  const listPlans = useNetworkStore((s) => s.listPlans);
+  const revision = useNetworkStore((s) => s.revision);
 
+  const [focusTick, setFocusTick] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
+
+  useFocusEffect(
+    useCallback(() => {
+      setFocusTick((t) => t + 1);
+    }, []),
+  );
+
+  const allPlans = useMemo<readonly NetworkPlan[]>(() => {
+    void revision;
+    void focusTick;
+    return listPlans();
+  }, [listPlans, revision, focusTick]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const plans = useCallback(() => {
-    const all = listPlans();
-    if (!debouncedQuery.trim()) return all;
-    const q = debouncedQuery.toLowerCase();
-    return all.filter((p) => p.name.toLowerCase().includes(q));
-  }, [listPlans, debouncedQuery]);
+  const filteredPlans = useMemo(() => {
+    const q = debouncedQuery.trim().toLowerCase();
+    if (!q) return allPlans;
+    return allPlans.filter(
+      (p) => p.name.toLowerCase().includes(q) || p.parentCidr.toLowerCase().includes(q),
+    );
+  }, [allPlans, debouncedQuery]);
 
   return (
-    <Screen title="My Network Plans" subtitle={`${plans().length} plan${plans().length === 1 ? '' : 's'} stored on this device.`} scroll>
+    <Screen
+      title="My Network Plans"
+      subtitle={`${filteredPlans.length} plan${filteredPlans.length === 1 ? '' : 's'} stored on this device.`}
+      scroll
+    >
       <View className="gap-4">
         {/* Search */}
         <Card padding="md" className="flex-row items-center gap-3">
           <Search size={20} strokeWidth={2} className="text-ink-muted shrink-0" />
           <TextInput
-            placeholder="Search by name..."
-            accessibilityLabel="Search plans by name"
+            placeholder="Search by name or CIDR..."
+            accessibilityLabel="Search plans by name or CIDR"
             value={searchQuery}
             onChangeText={setSearchQuery}
             className="min-h-touch flex-1 text-ink"
@@ -69,13 +82,15 @@ export default function PlansListScreen() {
         </Card>
 
         {/* Plans List */}
-        {plans().length === 0 ? (
+        {filteredPlans.length === 0 ? (
           <EmptyState
             icon={Plus}
             title={debouncedQuery ? 'No matching plans' : 'No plans yet'}
-            description={debouncedQuery
-              ? 'Try a different search term, or create a new plan.'
-              : 'Create your first plan in the Network Planner, then save it here.'}
+            description={
+              debouncedQuery
+                ? 'Try a different search term, or create a new plan.'
+                : 'Create your first plan in the Network Planner, then save it here.'
+            }
             action={
               <Button
                 variant="primary"
@@ -88,7 +103,7 @@ export default function PlansListScreen() {
           />
         ) : (
           <View className="gap-2">
-            {plans().map((plan) => (
+            {filteredPlans.map((plan) => (
               <PlanCard
                 key={plan.id}
                 plan={plan}
@@ -103,19 +118,6 @@ export default function PlansListScreen() {
             Plans are stored locally on this device. NetArchitect never connects to a network.
           </AppText>
         </View>
-      </View>
-
-      {/* Snackbars */}
-      <View className="absolute bottom-4 left-4 right-4 z-50 flex-col items-center gap-2 pointer-events-none">
-        {snackbars.map((sb) => (
-          <Snackbar
-            key={sb.id}
-            message={sb.message}
-            actionLabel={sb.actionLabel}
-            onAction={sb.onAction}
-            duration={sb.duration}
-          />
-        ))}
       </View>
     </Screen>
   );
@@ -147,9 +149,6 @@ function PlanCard({
         variant="ghost"
         block
         onPress={onPress}
-        // The children below are plain Views, so the Pressable has no text to
-        // derive a name from and announces as a bare "button". Spelled out from
-        // the same values the card displays, so the two cannot disagree.
         accessibilityLabel={`${plan.name}. ${plan.parentCidr}. ${plan.subnets.length} subnet${plan.subnets.length === 1 ? '' : 's'}. Updated ${formatRelative(plan.updatedAt)}.`}
         className="flex-row items-center gap-3 p-0"
         icon={null}

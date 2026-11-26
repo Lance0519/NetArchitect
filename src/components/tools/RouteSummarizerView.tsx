@@ -6,7 +6,7 @@
  * unadvertised routing "holes".
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import {
@@ -17,7 +17,16 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 
-import { AppText, Badge, Banner, Button, Card, ProgressBar, TextField } from '@/components';
+import {
+  AppText,
+  Badge,
+  Banner,
+  Button,
+  Card,
+  ProgressBar,
+  TextField,
+  showSnackbar,
+} from '@/components';
 import { summarizeRoutes, type RouteSummaryResult } from '@/core/supernet-engine';
 
 const PRESETS = [
@@ -38,14 +47,24 @@ const PRESETS = [
 export function RouteSummarizerView() {
   const [inputText, setInputText] = useState<string>(PRESETS[0].subnets);
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
   const lines = useMemo(() => inputText.split('\n'), [inputText]);
   const outcome = useMemo(() => summarizeRoutes(lines), [lines]);
 
   const handleCopy = (val: string) => {
     void Clipboard.setStringAsync(val);
+    showSnackbar(`Copied ${val} to clipboard`);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (timerRef.current !== null) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -65,7 +84,7 @@ export function RouteSummarizerView() {
               accessibilityRole="button"
               accessibilityLabel={`Load preset ${p.label}`}
               onPress={() => setInputText(p.subnets)}
-              className="rounded-pill border border-line bg-surface-raised px-3 py-1.5 active:bg-accent"
+              className="min-h-touch justify-center rounded-pill border border-line bg-surface-raised px-3 py-1.5 active:border-accent active:bg-accent-soft"
             >
               <AppText variant="caption" tone="accent" className="font-medium">
                 {p.label}
@@ -142,7 +161,7 @@ function SummaryResults({
               accessibilityRole="button"
               accessibilityLabel="Copy summary CIDR"
               onPress={() => onCopy(result.summaryCidr)}
-              className="flex-row items-center gap-1"
+              className="min-h-touch flex-row items-center gap-1 px-2"
             >
               <Copy size={14} className="text-accent" />
               <AppText variant="caption" tone="accent">

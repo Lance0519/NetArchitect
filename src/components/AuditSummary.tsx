@@ -1,24 +1,21 @@
 /**
- * AuditSummary - high-level audit results summary.
- *
- * Shows the plan being audited, total checks passed, and issue counts.
- * Used at the top of the Security Audit screen.
+ * AuditSummary - high-level static security audit results summary.
  */
 
 import { View } from 'react-native';
 
-import { AppText } from '../AppText';
-import { Card } from '../Card';
+import { AppText } from './AppText';
+import { Card } from './Card';
 import { cn } from '@/utils/cn';
 
 export interface AuditSummaryProps {
-  planName: string;
-  parentCidr: string;
-  subnetCount: number;
-  checksPassed: number;
-  warnings: number;
-  critical: number;
-  className?: string;
+  readonly planName: string;
+  readonly parentCidr: string;
+  readonly subnetCount: number;
+  readonly checksPassed: number;
+  readonly warnings: number;
+  readonly critical: number;
+  readonly className?: string | undefined;
 }
 
 export function AuditSummary({
@@ -44,7 +41,7 @@ export function AuditSummary({
       <View className="flex-row gap-4">
         <View className="gap-0.5">
           <AppText variant="caption" tone="faint">
-            Passed
+            Rules Passed
           </AppText>
           <AppText variant="title" tone="success" mono>
             {checksPassed}
@@ -60,7 +57,7 @@ export function AuditSummary({
         </View>
         <View className="gap-0.5">
           <AppText variant="caption" tone="faint">
-            Critical
+            Critical / High
           </AppText>
           <AppText variant="title" tone="critical" mono>
             {critical}

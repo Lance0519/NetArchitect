@@ -46,3 +46,6 @@ Thumbs.db
 # ignored and output must be written to a file to be grepped. One rule rather
 # than an enumeration of every scratch name as it gets invented.
 *-out.txt
+
+# Local developer agent tooling
+.opencode/

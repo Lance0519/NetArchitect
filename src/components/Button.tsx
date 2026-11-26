@@ -79,9 +79,16 @@ export interface ButtonProps extends Omit<PressableProps, 'children' | 'style' |
   block?: boolean | undefined;
   /** Leading or trailing content - usually an icon. */
   icon?: ReactNode | undefined;
-  children: string;
+  children: ReactNode;
   className?: string | undefined;
   style?: StyleProp<ViewStyle> | undefined;
+}
+
+function isTextContent(node: ReactNode): boolean {
+  if (typeof node === 'string' || typeof node === 'number') return true;
+  if (node === null || node === undefined || typeof node === 'boolean') return true;
+  if (Array.isArray(node)) return node.every(isTextContent);
+  return false;
 }
 
 export function Button({
@@ -156,16 +163,20 @@ export function Button({
       ) : (
         renderedIcon
       )}
-      <AppText
-        variant={LABEL_VARIANT[size]}
-        tone={LABEL_TONE[variant]}
-        numberOfLines={1}
-        // `flex-shrink` so a long label truncates rather than pushing the icon
-        // out of the button.
-        className="flex-shrink"
-      >
-        {children}
-      </AppText>
+      {isTextContent(children) ? (
+        <AppText
+          variant={LABEL_VARIANT[size]}
+          tone={LABEL_TONE[variant]}
+          numberOfLines={1}
+          // `flex-shrink` so a long label truncates rather than pushing the icon
+          // out of the button.
+          className="flex-shrink"
+        >
+          {children}
+        </AppText>
+      ) : (
+        children
+      )}
     </Pressable>
   );
 }

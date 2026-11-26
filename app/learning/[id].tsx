@@ -22,22 +22,7 @@ import {
 
 import { AppText, Badge, Button, Card, Divider, Screen } from '@/components';
 import { TOPICS, type Topic } from '@/content/topics';
-import { useLearningProgress } from '@/hooks/useLearningProgress';
-import type { QuestionType } from '@/core/question-generator';
-
-const TOPIC_PRACTICE_TYPE: Record<string, QuestionType> = {
-  'ipv4-addressing': 'classify-space',
-  'cidr': 'smallest-cidr',
-  'subnet-masks': 'compute-mask',
-  'wildcard-masks': 'compute-mask',
-  'network-broadcast': 'subnet-from-ip',
-  'usable-hosts': 'smallest-cidr',
-  'vlsm': 'vlsm-allocation',
-  'vlans': 'subnet-from-ip',
-  'segmentation': 'vlsm-allocation',
-  'rfc1918-bogons': 'classify-space',
-  'rfc3021-links': 'smallest-cidr',
-};
+import { TOPIC_PRACTICE_TYPE, useLearningProgress } from '@/hooks/useLearningProgress';
 
 export default function TopicDetailScreen() {
   const router = useRouter();
@@ -65,7 +50,7 @@ export default function TopicDetailScreen() {
   const handlePractice = () => {
     router.push({
       pathname: '/learning/practice',
-      params: { type: practiceType },
+      params: { type: practiceType, topicId: topic?.id ?? '' },
     } as any);
   };
 

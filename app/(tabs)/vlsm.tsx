@@ -18,21 +18,23 @@ import { useCallback, useMemo } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
-import { CircleDashed, ClipboardCheck, Send } from 'lucide-react-native';
+import { CircleDashed, ClipboardCheck, RotateCcw, Send } from 'lucide-react-native';
 
 import {
   AppText,
+  Badge,
   Banner,
   Button,
   Card,
   EmptyState,
   Screen,
   SubnetBar,
+  SubnetCard,
   SubnetTable,
   TextField,
   VlsmRequirementList,
+  showSnackbar,
 } from '@/components';
-import { SubnetCard } from '@/components/network';
 import { evaluateVlsm } from '@/core/vlsm-input';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useVlsmStore } from '@/store/vlsm-store';
@@ -47,6 +49,7 @@ export default function VlsmScreen() {
   const addRow = useVlsmStore((state) => state.addRow);
   const removeRow = useVlsmStore((state) => state.removeRow);
   const moveRow = useVlsmStore((state) => state.moveRow);
+  const reset = useVlsmStore((state) => state.reset);
   const stageHandoff = useVlsmStore((state) => state.stageHandoff);
 
   const settled = useDebouncedValue(draft);
@@ -57,6 +60,7 @@ export default function VlsmScreen() {
   const copyAll = useCallback(() => {
     if (outcome.kind !== 'ok') return;
     void Clipboard.setStringAsync(buildVlsmText(outcome.result));
+    showSnackbar('Allocation table copied to clipboard');
   }, [outcome]);
 
   const sendToPlanner = useCallback(() => {
@@ -126,6 +130,17 @@ export default function VlsmScreen() {
         {/* Results */}
         {view === null ? null : (
           <>
+            {/* Educational & engineering notices (RFC 3021 /31, RFC 7600 alignment, fullness) */}
+            {view.notices.map((item) => (
+              <Banner
+                key={item.title}
+                tone={item.kind === 'warn' ? 'warn' : 'info'}
+                title={item.citation ? `${item.title} · ${item.citation}` : item.title}
+              >
+                {item.body}
+              </Banner>
+            ))}
+
             {/* Address Space Visualization */}
             <Card padding="md">
               <View className="gap-3">
@@ -143,7 +158,7 @@ export default function VlsmScreen() {
               </View>
             </Card>
 
-            {/* Summary Stats */}
+            {/* Summary Stats & Free Ranges */}
             <Card padding="lg">
               <View className="gap-3">
                 <AppText variant="label" tone="muted">
@@ -166,6 +181,24 @@ export default function VlsmScreen() {
                     </View>
                   ))}
                 </View>
+
+                {view.summary.freeRanges.length > 0 ? (
+                  <View className="gap-1.5 border-t border-line-subtle pt-3">
+                    <AppText variant="caption" tone="muted">
+                      REMAINING FREE BLOCKS ({view.summary.freeRanges.length})
+                    </AppText>
+                    <View className="flex-row flex-wrap gap-2">
+                      {view.summary.freeRanges.map((free) => (
+                        <Badge
+                          key={free.cidr}
+                          tone={free.isFragmented ? 'medium' : 'neutral'}
+                        >
+                          {`${free.cidr} (${free.addresses})`}
+                        </Badge>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
               </View>
             </Card>
 
@@ -222,6 +255,15 @@ export default function VlsmScreen() {
                   onPress={copyAll}
                 >
                   Copy as a table
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  block
+                  icon={<RotateCcw size={16} strokeWidth={2} />}
+                  onPress={reset}
+                >
+                  Reset allocator
                 </Button>
               </View>
             </Card>

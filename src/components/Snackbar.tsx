@@ -19,13 +19,16 @@
  * false positives for Animated API usage.
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Animated, Easing, PanResponder } from 'react-native';
+import { Animated, Easing, PanResponder, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
+import { create } from 'zustand';
 
 import { AppText } from './AppText';
 import { Button } from './Button';
 import { Card } from './Card';
 import { cn } from '@/utils/cn';
+import { generateId } from '@/utils/id';
 
 export interface SnackbarProps {
   /** The message to show. */
@@ -101,6 +104,7 @@ export function Snackbar({
 
   return (
     <Animated.View
+      accessibilityLiveRegion="polite"
       style={{
         transform: [{ translateY: translateY.current }],
       }}
@@ -109,14 +113,21 @@ export function Snackbar({
       <Card
         tone="inset"
         padding="md"
-        className={cn('flex-row items-center gap-3', 'w-full max-w-[90%]')}
+        className={cn('flex-row items-center gap-3', 'w-full')}
       >
         <AppText variant="body" tone="primary" className="flex-1">
           {message}
         </AppText>
 
         {actionLabel && onAction ? (
-          <Button variant="ghost" size="sm" onPress={() => { onAction(); dismiss(); }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onPress={() => {
+              onAction();
+              dismiss();
+            }}
+          >
             {actionLabel}
           </Button>
         ) : null}
@@ -136,36 +147,110 @@ export function Snackbar({
 }
 
 /**
- * Hook for showing snackbars from anywhere in the component tree.
- *
- * Usage:
- *   const showSnackbar = useSnackbar();
- *   showSnackbar('Plan deleted', 'Undo', () => undoDelete());
+ * Shared transient snackbar store so calls from any screen or modal sheet
+ * render in the active `<SnackbarHost />`.
  */
-interface SnackbarItem {
+export interface SnackbarItem {
   readonly id: string;
   readonly message: string;
-  readonly actionLabel?: string;
-  readonly onAction?: () => void;
-  readonly duration?: number;
+  readonly actionLabel?: string | undefined;
+  readonly onAction?: (() => void) | undefined;
+  readonly duration?: number | undefined;
 }
 
-export function useSnackbar() {
-  const [snackbars, setSnackbars] = useState<readonly SnackbarItem[]>([]);
-
-  const showSnackbar = useCallback((
+interface SnackbarStore {
+  readonly snackbars: readonly SnackbarItem[];
+  readonly modalHostCount: number;
+  showSnackbar: (
     message: string,
     actionLabel?: string,
     onAction?: () => void,
     duration?: number,
-  ) => {
-    const id = crypto.randomUUID();
-    setSnackbars((prev) => [...prev, { id, message, actionLabel, onAction, duration }] as readonly SnackbarItem[]);
-  }, []);
+  ) => void;
+  dismissSnackbar: (id: string) => void;
+  registerModalHost: () => void;
+  unregisterModalHost: () => void;
+}
 
-  const dismissSnackbar = useCallback((id: string) => {
-    setSnackbars((prev) => prev.filter((s) => s.id !== id));
-  }, []);
+const useSnackbarStore = create<SnackbarStore>()((set) => ({
+  snackbars: [],
+  modalHostCount: 0,
+  showSnackbar: (message, actionLabel, onAction, duration) => {
+    const id = generateId();
+    set((state) => ({
+      snackbars: [
+        ...state.snackbars.slice(-2),
+        { id, message, actionLabel, onAction, duration },
+      ],
+    }));
+  },
+  dismissSnackbar: (id) =>
+    set((state) => ({
+      snackbars: state.snackbars.filter((item) => item.id !== id),
+    })),
+  registerModalHost: () => set((state) => ({ modalHostCount: state.modalHostCount + 1 })),
+  unregisterModalHost: () =>
+    set((state) => ({ modalHostCount: Math.max(0, state.modalHostCount - 1) })),
+}));
 
-  return { snackbars, showSnackbar, dismissSnackbar };
+/** Imperative helper to trigger a snackbar from anywhere. */
+export const showSnackbar = (
+  message: string,
+  actionLabel?: string,
+  onAction?: () => void,
+  duration?: number,
+): void => {
+  useSnackbarStore.getState().showSnackbar(message, actionLabel, onAction, duration);
+};
+
+export function useSnackbar() {
+  const snackbars = useSnackbarStore((s) => s.snackbars);
+  const enqueue = useSnackbarStore((s) => s.showSnackbar);
+  const dismissSnackbar = useSnackbarStore((s) => s.dismissSnackbar);
+
+  return { snackbars, showSnackbar: enqueue, dismissSnackbar };
+}
+
+/**
+ * Renders active snackbars pinned above the safe-area bottom inset.
+ *
+ * Mounted once in `app/_layout.tsx` and once inside visible `<Sheet />` modals
+ * (`inModal`) so notifications remain visible above native Modal windows without
+ * ever double-rendering.
+ */
+export function SnackbarHost({ inModal = false }: { readonly inModal?: boolean }) {
+  const insets = useSafeAreaInsets();
+  const snackbars = useSnackbarStore((s) => s.snackbars);
+  const modalHostCount = useSnackbarStore((s) => s.modalHostCount);
+  const dismissSnackbar = useSnackbarStore((s) => s.dismissSnackbar);
+  const registerModalHost = useSnackbarStore((s) => s.registerModalHost);
+  const unregisterModalHost = useSnackbarStore((s) => s.unregisterModalHost);
+
+  useEffect(() => {
+    if (!inModal) return;
+    registerModalHost();
+    return () => unregisterModalHost();
+  }, [inModal, registerModalHost, unregisterModalHost]);
+
+  if (!inModal && modalHostCount > 0) return null;
+  if (snackbars.length === 0) return null;
+
+  return (
+    <View
+      pointerEvents="box-none"
+      className="absolute inset-x-4 z-50 gap-2"
+      style={{ bottom: Math.max(insets.bottom, 16) }}
+    >
+      {snackbars.map((item) => (
+        <Snackbar
+          key={item.id}
+          message={item.message}
+          actionLabel={item.actionLabel}
+          onAction={item.onAction}
+          duration={item.duration}
+          onDismiss={() => dismissSnackbar(item.id)}
+        />
+      ))}
+    </View>
+  );
 }

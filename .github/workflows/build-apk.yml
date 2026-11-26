@@ -30,14 +30,14 @@ jobs:
       - name: 1. Checkout repository
         uses: actions/checkout@v4
 
-      - name: 2. Setup Node.js 20
+      - name: 2. Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: 3. Setup Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -54,24 +54,24 @@ jobs:
       - name: 6. Install Node dependencies
         run: npm ci
 
-      - name: 7. Run code quality & test checks
+      - name: 7. Run code quality, architecture, and test checks
         run: npm run check
 
       - name: 8. Prebuild Android native project
         run: npx expo prebuild --platform android --no-install
 
+      - name: 8b. Verify privacy hardening in generated AndroidManifest
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          grep -q 'android:allowBackup="false"' "$MANIFEST"
+          grep -q 'android.permission.INTERNET' "$MANIFEST"
+          grep -q 'tools:node="remove"' "$MANIFEST"
+          test -f android/app/src/main/res/xml/backup_rules.xml
+          test -f android/app/src/main/res/xml/data_extraction_rules.xml
+          echo "Verified privacy hardening manifest and backup rules."
+
       - name: 9. Setup Gradle Cache
         uses: gradle/actions/setup-gradle@v4
-        # No `with:` block. The previous `build-root-directory: android` was not a
-        # valid input for this action - v4 rejected it by name and listed every
-        # input it does accept, none of which was that one. An unknown input makes
-        # the step fail validation, so the cache was never configured and every
-        # run rebuilt all four ABIs of C++ from cold. That is what turned a
-        # routine build into a 22-minute one, which is where the memory pressure
-        # that step 13 dies under comes from.
-        #
-        # setup-gradle finds the Gradle user home and the project cache on its
-        # own; there is nothing to point it at.
 
       - name: 10. Generate high-resolution icons and drawables
         run: python scripts/generate-assets.py
@@ -79,9 +79,54 @@ jobs:
       - name: 11. Make Gradle wrapper executable
         run: chmod +x android/gradlew
 
-      - name: 12. Configure Gradle memory and workers for CI
+      - name: 12. Configure Gradle memory, ABIs, and optional release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
+          # Target real mobile device ABIs for release builds (drops x86/x86_64 emulator bloat).
+          if [ "$BUILD_TYPE" = "release" ]; then
+            sed -i 's/^reactNativeArchitectures=.*/reactNativeArchitectures=arm64-v8a,armeabi-v7a/' android/gradle.properties
+            if ! grep -q '^reactNativeArchitectures=' android/gradle.properties; then
+              printf "\nreactNativeArchitectures=arm64-v8a,armeabi-v7a\n" >> android/gradle.properties
+            fi
+          fi
           printf "\norg.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m\norg.gradle.workers.max=2\norg.gradle.parallel=false\n" >> android/gradle.properties
+
+          if [ "$BUILD_TYPE" = "release" ] && [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+            {
+              printf "\nNETARCHITECT_UPLOAD_STORE_FILE=release.keystore\n"
+              printf "NETARCHITECT_UPLOAD_STORE_PASSWORD=%s\n" "$ANDROID_KEYSTORE_PASSWORD"
+              printf "NETARCHITECT_UPLOAD_KEY_ALIAS=%s\n" "$ANDROID_KEY_ALIAS"
+              printf "NETARCHITECT_UPLOAD_KEY_PASSWORD=%s\n" "$ANDROID_KEY_PASSWORD"
+            } >> android/gradle.properties
+
+            node -e '
+              const fs = require("fs");
+              const p = "android/app/build.gradle";
+              let src = fs.readFileSync(p, "utf8");
+              if (!src.includes("NETARCHITECT_UPLOAD_STORE_FILE")) {
+                src = src.replace(
+                  /signingConfigs\s*\{/,
+                  `signingConfigs {\n        release {\n            if (project.hasProperty("NETARCHITECT_UPLOAD_STORE_FILE")) {\n                storeFile file(NETARCHITECT_UPLOAD_STORE_FILE)\n                storePassword NETARCHITECT_UPLOAD_STORE_PASSWORD\n                keyAlias NETARCHITECT_UPLOAD_KEY_ALIAS\n                keyPassword NETARCHITECT_UPLOAD_KEY_PASSWORD\n            }\n        }`
+                );
+                src = src.replace(
+                  /(release\s*\{[\s\S]*?)signingConfig signingConfigs\.debug/,
+                  "$1signingConfig signingConfigs.release"
+                );
+                fs.writeFileSync(p, src, "utf8");
+              }
+            '
+            echo "RELEASE_SIGNED=true" >> "$GITHUB_ENV"
+            echo "Configured production release keystore signing."
+          else
+            echo "RELEASE_SIGNED=false" >> "$GITHUB_ENV"
+            echo "::notice title=Debug-signed release APK::ANDROID_KEYSTORE_* secrets are not set; falling back to debug keystore for sideloading."
+          fi
 
       - name: 13. Build APK with Gradle
         env:
@@ -90,24 +135,10 @@ jobs:
           BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
           mkdir -p "$RUNNER_TEMP/gradle-logs"
           cd android
-          # `pipefail` is not set by default in a bare `run:` block on GitHub, so
-          # without this the `tee` below would swallow Gradle's exit status and
-          # this step would report success on a failed build.
           set -o pipefail
           if [ "$BUILD_TYPE" = "debug" ]; then
             ./gradlew assembleDebug --no-daemon --build-cache --console=plain --stacktrace --info 2>&1 | tee "$RUNNER_TEMP/gradle-logs/build.log"
           else
-            # lintVitalRelease must be excluded too, not just its two children.
-            # It is the umbrella task that assembleRelease depends on, and it
-            # declares returnValueInputFile as the output of lintVitalReportRelease.
-            # Excluding only the children leaves the parent running with a file
-            # that is never produced, which fails at configuration time:
-            #   property 'returnValueInputFile' specifies file
-            #   '.../lint_vital_return_value/release/lintVitalReportRelease/return-value-release.txt'
-            #   which doesn't exist.
-            # All three are listed so the whole lint-vital subtree across the 13
-            # modules is skipped rather than running 13 analysis tasks whose only
-            # consumer was excluded.
             ./gradlew assembleRelease --no-daemon --build-cache --console=plain --stacktrace --info -x lintVitalRelease -x lintVitalAnalyzeRelease -x lintVitalReportRelease 2>&1 | tee "$RUNNER_TEMP/gradle-logs/build.log"
           fi
 
@@ -115,20 +146,6 @@ jobs:
         if: failure()
         run: |
           LOG="$RUNNER_TEMP/gradle-logs/build.log"
-          # Annotations - not the job summary - are the channel here. The logs API
-          # and the summary are both unreadable without authenticating, even for a
-          # public repository, but
-          #   GET /repos/{owner}/{repo}/check-runs/{id}/annotations
-          # answers unauthenticated. A run that reports only "Process completed
-          # with exit code 1" is undiagnosable, which is the condition the three
-          # previous fix attempts were made under.
-          #
-          # The previous version of this step grepped for known failure strings
-          # (FAILURE:, What went wrong, OOM, ninja:). It emitted nothing, which
-          # proves the build died without printing any of them - so matching on
-          # expected strings was the wrong shape. This version is pattern-free: it
-          # reports the tail of the log whatever it contains, including the case
-          # where the log is empty.
           emit() {
             printf '::error title=%s::%s\n' "$1" \
               "$(printf '%s' "$2" | sed -e 's/%/%25/g' -e 's/\r//g' -e 's/::/: :/g' | cut -c1-900)"
@@ -148,13 +165,6 @@ jobs:
             if [ ! -s "$LOG" ]; then
               emit "Gradle log empty" "Gradle wrote nothing to stdout or stderr."
             fi
-            # Anchored on the last "FAILURE:" rather than a fixed tail. Gradle
-            # prints FAILURE:, then "* What went wrong:", then the failing task,
-            # then the exception, and only then -- with --stacktrace -- the stack
-            # frames. That trace runs to tens of lines, so tail -n 15 captured the
-            # frames and the "BUILD FAILED" summary while pushing the task name
-            # out of the window. The task name is the whole answer, so start at
-            # the banner and read forward.
             START=$(grep -n "FAILURE: Build failed" "$LOG" | tail -1 | cut -d: -f1)
             if [ -n "$START" ]; then
               FROM=$(( START > 3 ? START - 3 : 1 ))
@@ -169,20 +179,25 @@ jobs:
               done
             fi
           fi
-          # A 4-ABI new-architecture build is large enough to hit the runner's
-          # disk or memory ceiling, and neither produces a Gradle failure banner.
-          # Both are cheap to rule out while reading the same output.
           emit "Runner disk" "$(df -h "$RUNNER_TEMP" | tail -n 1)"
           emit "Runner memory" "$(free -m | sed -n '2p')"
 
       - name: 14. Locate and stage APK
         run: |
           BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
+          PKG_VER=$(node -p "require('./package.json').version")
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="v${PKG_VER}-${GITHUB_SHA:0:7}"
+          fi
           mkdir -p dist-apk
           if [ "$BUILD_TYPE" = "debug" ]; then
-            cp android/app/build/outputs/apk/debug/app-debug.apk dist-apk/NetArchitect-debug.apk
+            cp android/app/build/outputs/apk/debug/app-debug.apk "dist-apk/NetArchitect-${VERSION}-debug.apk"
+          elif [ "${RELEASE_SIGNED}" = "true" ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk "dist-apk/NetArchitect-${VERSION}-release.apk"
           else
-            cp android/app/build/outputs/apk/release/app-release.apk dist-apk/NetArchitect-v1.0.0-release.apk
+            cp android/app/build/outputs/apk/release/app-release.apk "dist-apk/NetArchitect-${VERSION}-release-debugsigned.apk"
           fi
           echo "Staged APK contents:"
           ls -la dist-apk/

@@ -363,25 +363,33 @@ const buildSegments = (result: VlsmResult): readonly VlsmBarSegment[] => {
   // 1 to the last bit. The test asserts the sum rather than trusting this comment.
   const share = (addresses: number): number => addresses / total;
 
-  const allocated: VlsmBarSegment[] = result.allocations.map((allocation) => ({
-    id: allocation.id,
-    label: allocation.name,
-    share: share(allocation.subnet.totalAddresses),
-    isFree: false,
-    role: allocation.role,
-    percentLabel: formatPercent(share(allocation.subnet.totalAddresses) * 100),
+  const allocated = result.allocations.map((allocation) => ({
+    start: allocation.subnet.networkAddress,
+    segment: {
+      id: allocation.id,
+      label: allocation.name,
+      share: share(allocation.subnet.totalAddresses),
+      isFree: false,
+      role: allocation.role,
+      percentLabel: formatPercent(share(allocation.subnet.totalAddresses) * 100),
+    } satisfies VlsmBarSegment,
   }));
 
-  const free: VlsmBarSegment[] = result.freeRanges.map((entry, index) => ({
-    id: `free-${index}`,
-    label: 'Free',
-    share: share(entry.addresses),
-    isFree: true,
-    role: null,
-    percentLabel: formatPercent(share(entry.addresses) * 100),
+  const free = result.freeRanges.map((entry, index) => ({
+    start: entry.start,
+    segment: {
+      id: `free-${index}`,
+      label: 'Free',
+      share: share(entry.addresses),
+      isFree: true,
+      role: null,
+      percentLabel: formatPercent(share(entry.addresses) * 100),
+    } satisfies VlsmBarSegment,
   }));
 
-  return [...allocated, ...free];
+  return [...allocated, ...free]
+    .sort((a, b) => a.start - b.start)
+    .map((entry) => entry.segment);
 };
 
 /* ------------------------------------------------------------------ *

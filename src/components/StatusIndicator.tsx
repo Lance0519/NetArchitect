@@ -1,19 +1,16 @@
 /**
- * StatusIndicator - a small colored dot with a label.
- *
- * Used for "Offline Ready", plan status, etc.
- * The label is always present; color is never the only signal.
+ * StatusIndicator - a small colored dot paired with a written label.
  */
 
 import { View } from 'react-native';
 
-import { AppText } from '../AppText';
+import { AppText } from './AppText';
 import { cn } from '@/utils/cn';
 
 export interface StatusIndicatorProps {
-  label: string;
-  tone?: 'success' | 'warning' | 'critical' | 'neutral';
-  className?: string;
+  readonly label: string;
+  readonly tone?: 'success' | 'warning' | 'critical' | 'neutral' | undefined;
+  readonly className?: string | undefined;
 }
 
 const TONE_CLASS = {

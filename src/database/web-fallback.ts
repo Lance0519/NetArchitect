@@ -12,6 +12,8 @@
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { SCHEMA_VERSION } from './migrations';
+
 interface PlanRow {
   id: string;
   name: string;
@@ -33,6 +35,7 @@ interface SubnetRow {
   cidr: string;
   mask: string;
   gateway: string | null;
+  gateway_mode: string;
   requested_hosts: number;
   sort_order: number;
   created_at: number;
@@ -45,6 +48,8 @@ interface CustomRoleRow {
 }
 
 const STORAGE_KEY = 'netarchitect:sqlite_fallback_v1';
+
+const subnetCompositeKey = (planId: string, id: string): string => `${planId}::${id}`;
 
 class WebFallbackStorage {
   private plans = new Map<string, PlanRow>();
@@ -65,7 +70,14 @@ class WebFallbackStorage {
         for (const p of data.plans) this.plans.set(p.id, p);
       }
       if (Array.isArray(data.subnets)) {
-        for (const s of data.subnets) this.subnets.set(s.id, s);
+        for (const s of data.subnets) {
+          const hydrated: SubnetRow = {
+            ...s,
+            gateway_mode:
+              s.gateway_mode ?? (s.gateway !== null && s.gateway !== undefined ? 'manual' : 'auto'),
+          };
+          this.subnets.set(subnetCompositeKey(hydrated.plan_id, hydrated.id), hydrated);
+        }
       }
       if (Array.isArray(data.customRoles)) {
         for (const r of data.customRoles) this.customRoles.set(r.id, r);
@@ -106,7 +118,7 @@ class WebFallbackStorage {
     const s = sql.trim().replace(/\s+/g, ' ');
 
     if (/^PRAGMA user_version/i.test(s)) {
-      return [{ user_version: 1 }];
+      return [{ user_version: SCHEMA_VERSION }];
     }
 
     if (/^PRAGMA/i.test(s) || /^CREATE/i.test(s)) {
@@ -148,10 +160,14 @@ class WebFallbackStorage {
       return list;
     }
 
-    // SELECT * FROM custom_roles ORDER BY created_at
+    // SELECT * FROM custom_roles ORDER BY name | created_at
     if (/^SELECT \* FROM custom_roles/i.test(s)) {
       const list = Array.from(this.customRoles.values());
-      list.sort((a, b) => a.created_at - b.created_at);
+      if (/ORDER BY name/i.test(s)) {
+        list.sort((a, b) => a.name.localeCompare(b.name));
+      } else {
+        list.sort((a, b) => a.created_at - b.created_at);
+      }
       return list;
     }
 
@@ -192,33 +208,45 @@ class WebFallbackStorage {
     // DELETE FROM subnets WHERE plan_id = ?
     if (/^DELETE FROM subnets WHERE plan_id = \?/i.test(s)) {
       const planId = String(params[0]);
-      for (const [id, subnet] of this.subnets.entries()) {
+      for (const [key, subnet] of this.subnets.entries()) {
         if (subnet.plan_id === planId) {
-          this.subnets.delete(id);
+          this.subnets.delete(key);
         }
       }
       this.persist();
       return [];
     }
 
-    // INSERT INTO subnets
+    // INSERT INTO subnets (supports both v1 13-col and v2 14-col with gateway_mode)
     if (/^INSERT INTO subnets/i.test(s)) {
+      const hasGatewayMode = /gateway_mode/i.test(s);
+      const gateway = params[9] !== null && params[9] !== undefined ? String(params[9]) : null;
       const row: SubnetRow = {
         id: String(params[0]),
         plan_id: String(params[1]),
         name: String(params[2]),
         role: String(params[3]),
-        custom_role_label: params[4] !== null ? String(params[4]) : null,
-        vlan_id: params[5] !== null ? Number(params[5]) : null,
+        custom_role_label:
+          params[4] !== null && params[4] !== undefined ? String(params[4]) : null,
+        vlan_id: params[5] !== null && params[5] !== undefined ? Number(params[5]) : null,
         network_address: String(params[6]),
         cidr: String(params[7]),
         mask: String(params[8]),
-        gateway: params[9] !== null ? String(params[9]) : null,
-        requested_hosts: Number(params[10]),
-        sort_order: Number(params[11]),
-        created_at: Number(params[12]),
+        gateway,
+        gateway_mode: hasGatewayMode
+          ? String(params[10] ?? (gateway !== null ? 'manual' : 'auto'))
+          : gateway !== null
+            ? 'manual'
+            : 'auto',
+        requested_hosts: Number(hasGatewayMode ? params[11] : params[10]),
+        sort_order: Number(hasGatewayMode ? params[12] : params[11]),
+        created_at: Number(hasGatewayMode ? params[13] : params[12]),
       };
-      this.subnets.set(row.id, row);
+      const key = subnetCompositeKey(row.plan_id, row.id);
+      if (this.subnets.has(key)) {
+        throw new Error(`UNIQUE constraint failed: subnets.plan_id, subnets.id (${row.plan_id}, ${row.id})`);
+      }
+      this.subnets.set(key, row);
       this.persist();
       return [];
     }
@@ -227,17 +255,17 @@ class WebFallbackStorage {
     if (/^DELETE FROM network_plans WHERE id = \?/i.test(s)) {
       const id = String(params[0]);
       this.plans.delete(id);
-      for (const [subId, subnet] of this.subnets.entries()) {
+      for (const [key, subnet] of this.subnets.entries()) {
         if (subnet.plan_id === id) {
-          this.subnets.delete(subId);
+          this.subnets.delete(key);
         }
       }
       this.persist();
       return [];
     }
 
-    // INSERT OR REPLACE INTO custom_roles
-    if (/^INSERT OR REPLACE INTO custom_roles/i.test(s)) {
+    // INSERT [OR REPLACE] INTO custom_roles
+    if (/^INSERT(?:\s+OR\s+REPLACE)?\s+INTO custom_roles/i.test(s)) {
       const row: CustomRoleRow = {
         id: String(params[0]),
         name: String(params[1]),

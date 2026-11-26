@@ -21,54 +21,44 @@ describe('question-generator', () => {
       expect(q1).toEqual(q2);
     });
 
-    it('produces valid smallest CIDR questions with plausible options', () => {
-      const q = generateSmallestCidrQuestion(100);
-      expect(q.type).toBe('smallest-cidr');
-      expect(q.options.length).toBeGreaterThanOrEqual(2);
-      expect(q.correctIndex).toBeGreaterThanOrEqual(0);
-      expect(q.correctIndex).toBeLessThan(q.options.length);
-      expect(q.prompt).toContain('What is the smallest subnet');
-      expect(q.explanation).toBeTruthy();
-    });
-
-    it('produces valid subnet-from-ip questions', () => {
-      const q = generateSubnetFromIpQuestion(200);
-      expect(q.type).toBe('subnet-from-ip');
-      expect(q.options.length).toBeGreaterThanOrEqual(2);
-      expect(q.correctIndex).toBeGreaterThanOrEqual(0);
-      expect(q.options[q.correctIndex]).toBeTruthy();
-      expect(q.prompt).toContain('What is the network address');
-    });
-
-    it('produces valid classify-space questions', () => {
-      const q = generateClassifySpaceQuestion(300);
-      expect(q.type).toBe('classify-space');
-      expect(q.options.length).toBeGreaterThanOrEqual(2);
-      expect(q.correctIndex).toBeGreaterThanOrEqual(0);
-      expect(q.prompt).toContain('How is');
-    });
-
-    it('produces valid compute-mask questions', () => {
-      const q = generateComputeMaskQuestion(400);
-      expect(q.type).toBe('compute-mask');
-      expect(q.options.length).toBeGreaterThanOrEqual(2);
-      expect(q.correctIndex).toBeGreaterThanOrEqual(0);
-      expect(q.prompt).toContain('What is the subnet mask');
-    });
-
-    it('produces valid vlsm-allocation questions', () => {
-      const q = generateVlsmAllocationQuestion(500);
-      expect(q.type).toBe('vlsm-allocation');
-      expect(q.options.length).toBeGreaterThanOrEqual(2);
-      expect(q.correctIndex).toBeGreaterThanOrEqual(0);
-      expect(q.prompt).toContain('Allocate subnets for');
-    });
-
-    it('routes all question types correctly through generateQuestion dispatch', () => {
+    it('produces valid 4-option questions across all types with unique options', () => {
       for (const type of QUESTION_TYPES) {
         const q = generateQuestion(type, 12345);
         expect(q.type).toBe(type);
+        expect(q.options).toHaveLength(4);
+        expect(new Set(q.options).size).toBe(4);
+        expect(q.correctIndex).toBeGreaterThanOrEqual(0);
+        expect(q.correctIndex).toBeLessThan(q.options.length);
+        expect(q.prompt).toBeTruthy();
+        expect(q.explanation).toBeTruthy();
       }
+    });
+
+    it('never throws ScopeExhaustionError across 250 seeds for every question type', () => {
+      for (let seed = 1; seed <= 250; seed += 1) {
+        for (const type of QUESTION_TYPES) {
+          const q = generateQuestion(type, seed * 37);
+          expect(q.options).toHaveLength(4);
+          expect(new Set(q.options).size).toBe(4);
+          expect(q.correctIndex).toBeGreaterThanOrEqual(0);
+          expect(q.correctIndex).toBeLessThan(4);
+          // Never claim a /31 provides 0 usable addresses (RFC 3021).
+          expect(q.explanation).not.toContain('2^1 - 2 = 0');
+        }
+      }
+    });
+
+    it('uses identical full-CIDR formatting for every VLSM option (no format leak)', () => {
+      const q = generateVlsmAllocationQuestion(500);
+      for (const option of q.options) {
+        expect(option).toMatch(/Subnet \d+: \d+\.\d+\.\d+\.\d+\/\d+/);
+      }
+    });
+
+    it('exposes direct generators cleanly', () => {
+      expect(generateSubnetFromIpQuestion(200).type).toBe('subnet-from-ip');
+      expect(generateClassifySpaceQuestion(300).type).toBe('classify-space');
+      expect(generateComputeMaskQuestion(400).type).toBe('compute-mask');
     });
   });
 });

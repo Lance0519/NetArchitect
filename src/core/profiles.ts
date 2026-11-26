@@ -161,8 +161,9 @@ export const ENTERPRISE_PROFILE: ProfileDefinition = Object.freeze({
     {
       name: 'Corporate Users',
       role: 'LAN',
-      hosts: 500,
-      rationale: 'Desktops, laptops and their phones. The largest block in almost every real plan.',
+      // Sized to a /24 (254 usable) so a single broadcast domain stays within IEEE 802.1D guidance.
+      hosts: 200,
+      rationale: 'Desktops, laptops and their phones, bounded to a /24 broadcast domain per floor or wing.',
     },
     {
       name: 'Servers',
@@ -193,8 +194,9 @@ export const ENTERPRISE_PROFILE: ProfileDefinition = Object.freeze({
     {
       name: 'Management',
       role: 'MANAGEMENT',
-      hosts: 25,
-      rationale: 'Switches, routers, hypervisors, out-of-band access. Kept to a block small enough to be worth locking down.',
+      // A /28 holds 14 usable addresses, matching the SEC-009 / NIST SP 800-207 management ceiling.
+      hosts: 12,
+      rationale: 'Switches, routers, hypervisors, out-of-band access. Sized to a /28 (14 usable) to keep the control plane tight.',
     },
     {
       name: 'DMZ',

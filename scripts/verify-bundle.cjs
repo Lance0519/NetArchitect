@@ -335,9 +335,24 @@ for (const [label, marker] of [
   // thing in its own words, which is the point - the promise is repeated where a plan is
   // made, not parked on one screen.
   ['offline statement', 'Planned on this device. NetArchitect never connects'],
-  // The honest statement about what this screen cannot do yet. Losing it would leave a
-  // user believing their plan was saved, which is the worst thing this screen could imply.
-  ['saving is deferred, and says so', 'Saving arrives with the local database'],
+  // Local SQLite persistence is active in the planner footer.
+  ['save action label', 'Save plan'],
+  ['update action label', 'Update plan'],
+]) {
+  check(label, hay.includes(marker), marker.length > 46 ? marker.slice(0, 46) + '...' : marker);
+}
+
+console.log('\n--- Phases 9-14: persistence, audit, export, learning, and utilities ---');
+for (const [label, marker] of [
+  ['saved plans route', 'My Network Plans'],
+  ['security audit route', 'Static design review of a saved plan.'],
+  ['security disclaimer', 'This auditor performs static design checks'],
+  ['config export sheet', 'Export Configuration'],
+  ['mikrotik export target', 'MikroTik RouterOS'],
+  ['netplan export target', 'renderer: networkd'],
+  ['learning practice CTA', 'Interactive Practice Drills'],
+  ['route summarizer utility', 'Route Summarizer'],
+  ['subnet splitter utility', 'Subnet Splitter'],
 ]) {
   check(label, hay.includes(marker), marker.length > 46 ? marker.slice(0, 46) + '...' : marker);
 }

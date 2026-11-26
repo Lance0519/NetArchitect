@@ -8,6 +8,8 @@
  * A hand-written fake would not exercise the real constraint/trigger paths.
  */
 import { openDatabase, withTransaction, resetDatabase, selectAll, selectOne, execute } from './database';
+import { calculateSubnet, integerToIPv4, parseCidr } from '@/core/ip-engine';
+import { generateId } from '@/utils/id';
 import type { NetworkPlan, PlannedSubnet, CustomRole, NetworkRole } from '@/types/network';
 
 /** Row shape as it comes out of SQLite. All columns are TEXT/INTEGER, never null unless noted. */
@@ -32,6 +34,7 @@ interface SubnetRow {
   cidr: string;
   mask: string;
   gateway: string | null;
+  gateway_mode?: string | null;
   requested_hosts: number;
   sort_order: number;
   created_at: number;
@@ -59,6 +62,7 @@ const buildSubnet = (
   customRoleLabel?: string,
   vlanId?: number,
   gateway?: string,
+  gatewayMode?: PlannedSubnet['gatewayMode'],
 ): PlannedSubnet => ({
   id,
   name,
@@ -69,7 +73,13 @@ const buildSubnet = (
   ...(customRoleLabel !== undefined && { customRoleLabel }),
   ...(vlanId !== undefined && { vlanId }),
   ...(gateway !== undefined && { gateway }),
+  ...(gatewayMode !== undefined && { gatewayMode }),
 });
+
+const parseGatewayMode = (raw: string | null | undefined, hasGateway: boolean): PlannedSubnet['gatewayMode'] => {
+  if (raw === 'auto' || raw === 'manual' || raw === 'none') return raw;
+  return hasGateway ? 'manual' : 'auto';
+};
 
 /** Convert a plan row + its subnet rows to a NetworkPlan. */
 const toNetworkPlan = (planRow: PlanRow, subnetRows: readonly SubnetRow[]): NetworkPlan => {
@@ -84,6 +94,7 @@ const toNetworkPlan = (planRow: PlanRow, subnetRows: readonly SubnetRow[]): Netw
       row.custom_role_label ?? undefined,
       row.vlan_id ?? undefined,
       row.gateway ?? undefined,
+      parseGatewayMode(row.gateway_mode, row.gateway !== null),
     ),
   );
 
@@ -153,26 +164,51 @@ export const savePlan = (plan: NetworkPlan): void => {
     execute(db, 'DELETE FROM subnets WHERE plan_id = ?', plan.id);
 
     for (const subnet of plan.subnets) {
-      // Derive network_address and mask from cidr for the list render
-      const cidrParts = subnet.cidr.split('/');
-      const ipPart = cidrParts[0]!;
-      const prefixPart = cidrParts[1]!;
-      const prefix = parseInt(prefixPart, 10);
-      const ipParts = ipPart.split('.').map(Number);
-      const ipOctet0 = ipParts[0] ?? 0;
-      const ipOctet1 = ipParts[1] ?? 0;
-      const ipOctet2 = ipParts[2] ?? 0;
-      const ipOctet3 = ipParts[3] ?? 0;
-      const ipInt = (ipOctet0 << 24) | (ipOctet1 << 16) | (ipOctet2 << 8) | ipOctet3;
-      const maskInt = prefix === 0 ? 0 : 0xffffffff << (32 - prefix);
-      const networkInt = ipInt & maskInt;
-      const networkAddr = `${(networkInt >>> 24) & 255}.${(networkInt >>> 16) & 255}.${(networkInt >>> 8) & 255}.${networkInt & 255}`;
-      const maskDotted = `${(maskInt >>> 24) & 255}.${(maskInt >>> 16) & 255}.${(maskInt >>> 8) & 255}.${maskInt & 255}`;
+      // Derive network_address and mask through the pure IPv4 engine (unsigned
+      // 32-bit arithmetic). Draft subnets with incomplete CIDRs persist safely
+      // with empty derived fields rather than fabricating 0.0.0.0.
+      let networkAddr = '';
+      let maskDotted = '';
+      if (subnet.cidr.trim().length > 0) {
+        try {
+          const parsed = parseCidr(subnet.cidr.trim());
+          const info = calculateSubnet(parsed.ip, parsed.prefix);
+          networkAddr = integerToIPv4(info.networkAddress);
+          maskDotted = integerToIPv4(info.subnetMask);
+        } catch {
+          networkAddr = '';
+          maskDotted = '';
+        }
+      }
 
-      execute(db, `
-        INSERT INTO subnets (id, plan_id, name, role, custom_role_label, vlan_id, network_address, cidr, mask, gateway, requested_hosts, sort_order, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, subnet.id, plan.id, subnet.name, subnet.role, subnet.customRoleLabel ?? null, subnet.vlanId ?? null, networkAddr, subnet.cidr, maskDotted, subnet.gateway ?? null, subnet.requestedHosts, subnet.sortOrder, now);
+      const gatewayMode =
+        subnet.gatewayMode ?? (subnet.gateway !== undefined ? 'manual' : 'auto');
+
+      execute(
+        db,
+        `
+        INSERT INTO subnets (
+          id, plan_id, name, role, custom_role_label, vlan_id,
+          network_address, cidr, mask, gateway, gateway_mode,
+          requested_hosts, sort_order, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+        subnet.id,
+        plan.id,
+        subnet.name,
+        subnet.role,
+        subnet.customRoleLabel ?? null,
+        subnet.vlanId ?? null,
+        networkAddr,
+        subnet.cidr,
+        maskDotted,
+        subnet.gateway ?? null,
+        gatewayMode,
+        Number.isFinite(subnet.requestedHosts) ? subnet.requestedHosts : 0,
+        subnet.sortOrder,
+        now,
+      );
     }
   });
 };
@@ -192,7 +228,7 @@ export const duplicatePlan = (id: string, newName: string): NetworkPlan | null =
   if (source === null) return null;
 
   const now = Date.now();
-  const newId = crypto.randomUUID();
+  const newId = generateId();
 
   const duplicate: NetworkPlan = {
     ...source,
@@ -200,7 +236,7 @@ export const duplicatePlan = (id: string, newName: string): NetworkPlan | null =
     name: newName,
     createdAt: now,
     updatedAt: now,
-    subnets: source.subnets.map((s) => ({ ...s, id: crypto.randomUUID() })),
+    subnets: source.subnets.map((s) => ({ ...s, id: generateId() })),
   };
 
   savePlan(duplicate);
